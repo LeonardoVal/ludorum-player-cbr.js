@@ -1,0 +1,41 @@
+{
+	"name": "@creatartis/ludorum-player-cbr",
+	"description": "Automatic players using case based reasoning methods for the Ludorum framework.",
+	"keywords": [
+		"board-game",
+		"board-game-framework",
+		"artificial-intelligence",
+		"artificial-players",
+		"javascript",
+		"case-based-reasoning"
+	],
+	"version": "0.0.1",
+	"author": {
+		"name": "Leonardo Val",
+		"email": "leonardo.val@creatartis.com"
+	},
+	"homepage": "http://creatartis.com",
+	"contributors": [],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "http://github.com/LeonardoVal/ludorum-player-cbr.js"
+	},
+	"main": "build/ludorum-player-cbr.min.js",
+	"files": [
+		"build",
+		"LICENSE.md"
+	],
+	"dependencies": {
+		"creatartis-base": "~0.1.7",
+		"ludorum": "~0.2.1-beta",
+		"sermat": "~0.0.9"
+	},
+	"devDependencies": {
+		"creatartis-grunt": "~0.0.13",
+		"@creatartis/ludorum-game-mancala": "~0.1.1"
+	},
+	"scripts": {
+		"test": "grunt"
+	}
+}
