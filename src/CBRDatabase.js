@@ -1,115 +1,184 @@
 /** # CBRDatabase 
 
 */
-var CBRDatabase = exports.CBRDatabase = declare({
+var CBRDatabase = base.declare({
 	constructor: function CBRDatabase(params) {
 		var cdb = this;
-		this.cases = params && params.cases || [];
-		this.index = params && params.index || iterable(this.cases).map(function (_case, i) {
-			return [cdb.___caseKey__(_case), i];
-		}).toObject();
-		this.featureFunction = params && params.featureFunction;
-		this.maxDistance = params && params.maxDistance || Infinity;
-		this.totalCount = iterable(this.cases).map(function (_case) {
-				return _case.count |0;
-			}).sum();
+		this.game = params.game;
+		this.__encoding__ = params.encoding;
+		this.maxDistance = params.maxDistance || Infinity;
+		this.minCount = params.minCount || 2;
+		this.random = params.random || base.Randomness.DEFAULT;
+		this.__setupDatabase__(this.game);
 	},
 
-	___caseKey__: function ___caseKey__(_case) {
-		return _case.join(' ');
+	__setupDatabase__: function __setupDatabase__(game) {
+		this.__db__ = new Database('./'+ game.name.toLowerCase() +'-cbr.db');
+		var encoding = this.encoding(game, game.moves()),
+			featureColumns = encoding.features.map(function (_, i) {
+				return 'f'+ i;
+			}),
+			actionColumns = game.players.map(function (_, i) {
+				return 'a'+ i;
+			}),
+			resultColumns = base.Iterable.range(game.players.length)
+				.product(['won', 'tied', 'lost'])
+				.mapApply(function (p, rt) { // result columns
+					return rt + p;
+				}).toArray();
+		var sql = 'CREATE TABLE IF NOT EXISTS Cases (count INTEGER, '+
+			featureColumns.concat(actionColumns).concat(resultColumns).map(function (colName) {
+				return colName +' INTEGER';
+			}).join(', ') +',\n'+
+			'UNIQUE ('+ featureColumns.concat(actionColumns).join(', ') +')'+
+			')';
+		this.__db__.prepare(sql).run();
+		this.__db__.register({ name: 'distance', deterministic: true, varargs: true },
+			this.distance);
 	},
 
-	features: function features(game, moves) {
-		return this.featureFunction(game, moves);
+	encoding: function encoding(game, moves) {
+		return this.__encoding__(game, moves);
+	},
+
+	distance: function distance() {
+		var r = 0,
+			middle = (arguments.length / 2) |0,
+			n1, n2;
+		for (var i = 0; i < middle; i++) {
+			n1 = arguments[i];
+			n2 = arguments[middle + i];
+			if (n1 !== null && !isNaN(n1) && n2 !== null && !isNaN(n2)) {
+				r += Math.abs(n1 - n2);
+			}
+		}
+		return r;
 	},
 
 	// Case building //////////////////////////////////////////////////////////////////////////////
 
-	addCase: function addCase(_case, results) {
-		var caseKey = this.___caseKey__(_case),
-			caseIndex = this.index[caseKey];
-		if (typeof caseIndex === 'undefined') {
-			_case = _case.slice(); // Shallow copy.
-			this.index[caseKey] = this.cases.length;
-			this.cases.push(_case);
-			_case.result = iterable(results).mapApply(function (p, r) {
-				return [p, [0, 0, 0]];
-			}).toObject();
-		} else {
-			_case = this.cases[caseIndex];
+	addCase: function addCase(features, actions, result) {
+		var players = this.game.players,
+			sqlWhere = ' WHERE '+ 
+				features.map(function (f, i) {
+					return 'f'+ i +(f === null ? ' IS NULL' : ' ='+ f);
+				}).join(' AND ') +' AND '+
+				actions.map(function (a, i) {
+					return 'a'+ i +(a === null ? ' IS NULL' : ' ='+ a);
+				}).join(' AND '),
+			sql;
+		sql = 'SELECT 1 FROM Cases '+ sqlWhere;
+		if (!this.__db__.prepare(sql).get()) {
+			sql = 'INSERT INTO Cases VALUES (0,'+ // count
+				features.map(JSON.stringify).join(',') +', '+
+				actions.map(JSON.stringify).join(', ') +', '+
+				base.Iterable.repeat(0, players.length * 3).join(',') + // result values
+				')';
+			this.__db__.prepare(sql).run();
 		}
-		_case.count = (_case.count || 0) + 1;
-		for (var p in results) {
-			if (results[p] > 0) {
-				_case.result[p][0]++;
-			} else if (results[p] < 0) {
-				_case.result[p][2]++;
-			} else { 
-				_case.result[p][1]++;
-			}	
-		}
-		this.totalCount++;
-		return _case.count;
+		sql = 'UPDATE Cases SET count = count + 1, '+
+			players.map(function (p) {
+				var r = result[p],
+					column = (r > 0 ? 'won' : r < 0 ? 'lost' : 'tied') + players.indexOf(p);
+				return column +'='+ column +'+1';
+			}).join(', ') +' WHERE '+ 
+			features.map(function (f, i) {
+				return 'f'+ i +(f === null ? ' IS NULL' : ' ='+ f);
+			}).join(' AND ') +' AND '+
+			actions.map(function (a, i) {
+				return 'a'+ i +(a === null ? ' IS NULL' : ' ='+ a);
+			}).join(' AND ');
+		this.__db__.prepare(sql).run();
 	},
 
-	addMatch: function addMatch(match) {
+	addMatch: function addMatch(match, randomAdvance) {
 		var cdb = this,
-			history = [];
+			history = [],
+			game;
+		// Random advance
+		if (+randomAdvance > 0) {
+			for (var randomPly = this.random.randomInt(randomAdvance + 1); randomPly > 0; randomPly--) {
+				game = match.state(); 
+				while (game.isContingent) {
+					match.__advanceContingents__(random);
+					game = match.state();
+				}
+				moves = game.moves();
+				if (moves) {
+					move = {};
+					game.activePlayers.forEach(function (activePlayer) {
+						move[activePlayer] = cdb.random.choice(moves[activePlayer]);
+					});
+					match.__advance__(game, move);
+					history.push(cdb.encoding(game, move));
+				}
+			}
+		}
 		match.events.on('move', function (g, ms) {
-			var fs = cdb.features(g, ms);
-			history.push(fs);
+			var data = cdb.encoding(g, ms);
+			history.push(data);
 		});
 		return match.run().then(function () {
-			var r = match.result(),
+			var result = match.result(),
 				count = 0;
-			history.forEach(function (fs) {
-				count += cdb.addCase(fs, r);
+			history.forEach(function (data) {
+				count += cdb.addCase(data.features, data.actions, result);
 			});
-			return count;
+			return match;
 		});
 	},
 
-	addMatches: function addMatches(matches) {
-		var cdb = this;
+	addMatches: function addMatches(matches, randomAdvance) {
+		var cdb = this,
+			i = 0;
 		return base.Future.sequence(matches, function (match) {
-			return cdb.addMatch(match);
+			if ((++i) % 10 === 0) console.log('Training reached '+ i +' matches. '+ (new Date())); //FIXME
+			return cdb.addMatch(match, randomAdvance);
 		});
 	},
 
-	addRandomMatches: function addRandomMatches(n, game) {
-		return this.addMatches(base.Iterable.range(n).map(function () {
-			return ludorum.players.RandomPlayer.playTo(game);
-		}));
-	},
-
-	addMatchesBetween: function addMatchesBetween(n, game, players) {
-		var matchups = Iterable.product.apply(Iterable, 
-				Iterable.repeat(players, game.players.length).toArray()
+	populate: function populate(options) {
+		options = options || {};
+		var cdb = this,
+			game = options.game || this.game,
+			n = options.n || 100,
+			players = options.players || [new ludorum.players.RandomPlayer()],
+			matchups = base.Iterable.product.apply(base.Iterable, 
+				base.Iterable.repeat(players, game.players.length).toArray()
 			).toArray();
-		n = Math.ceil(n / matchups.length);
-		return this.addMatches(Iterable.range(n).product(matchups).mapApply(function (i, players) {
-			return new ludorum.Match(game, players);
-		}));
+		return this.addMatches(base.Iterable.range(Math.ceil(n / matchups.length))
+			.product(matchups)
+			.mapApply(function (i, players) {
+				return new ludorum.Match(game, players);
+			}), options.maxPly);
 	},
 
 	// Database use ///////////////////////////////////////////////////////////////////////////////
 
-	distance: function distance(gameFeatures, caseFeatures) {
-		return base.iterable(gameFeatures).zip(caseFeatures).mapApply(function (gf, cf) {
-			return Math.abs(gf - cf);
-		}).sum();
-	},
-
-	knn: function knn(n, game) {
+	knn: function knn(n, game, role) {
 		var cdb = this,
-			fs = this.features(game),
-			cs = this.cases.map(function (_case) {
-				return [_case, cdb.distance(fs, _case)]; 
-			});
-		cs.sort(function (c1, c2) {
-			return c1[1] - c2[1];
+			roleIndex = game.players.indexOf(role),
+			data = this.encoding(game);
+		var resultSet = this.__db__.prepare('SELECT *, distance('+ 
+			data.features.map(function (_, i) {
+				return 'f'+ i;
+			}).join(', ') +', '+ data.features.join(', ') +') AS d '+
+			'FROM Cases WHERE a'+ roleIndex +' IS NOT NULL ORDER BY d LIMIT '+ n).all();
+		return resultSet.map(function (record) {
+			return {
+				count: record.count,
+				features: data.features.map(function (_, i) {
+					return record['f'+ i]; 
+				}),
+				actions: base.iterable(game.players).map(function (p, i) {
+					return [p, record['a'+ i]];
+				}).toObject(),
+				result: base.iterable(game.players).map(function (p, i) {
+					return [p, [record['won'+ i], record['tied'+ i], record['lost'+ i]]];
+				}).toObject(),
+				distance: record.d
+			};
 		});
-		return cs.slice(0, +n);
 	},
 
 	// Utilities //////////////////////////////////////////////////////////////////////////////////
