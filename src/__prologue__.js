@@ -3,6 +3,7 @@
 function __init__(base, Sermat, ludorum) { "use strict";
 // Import synonyms. ////////////////////////////////////////////////////////////////////////////////
 	var declare = base.declare,
+		unimplemented = base.objects.unimplemented,
 		raise = base.raise,
 		raiseIf = base.raiseIf,
 		Randomness = base.Randomness,
