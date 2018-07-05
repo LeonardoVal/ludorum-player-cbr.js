@@ -6,7 +6,10 @@ module.exports = function (grunt) {
 	});
 
 	require('creatartis-grunt').config(grunt, {
-		sourceNames: ['__prologue__', 'CBRDatabase', 'CBRPlayer', '__epilogue__'],
+		sourceNames: ['__prologue__', 
+			'CaseBase', 'CBRPlayer',
+			'dbs/MemoryCaseBase', 
+			'__epilogue__'],
 		deps: [
 			{ id: 'creatartis-base', name: 'base' },
 			{ id: 'sermat', name: 'Sermat',

@@ -17,5 +17,7 @@ function __init__(base, Sermat, ludorum) { "use strict";
 		__name__: 'ludorum_player_cbr',
 		__init__: __init__,
 		__dependencies__: [base, Sermat, ludorum],
-		__SERMAT__: { include: [base, ludorum] }
+		__SERMAT__: { include: [base, ludorum] },
+
+		dbs: { /* Namespace for different types of case bases. */ }
 	};

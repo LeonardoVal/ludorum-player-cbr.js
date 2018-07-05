@@ -1,7 +1,7 @@
 /** # CBR Player 
 
 */
-var CBRPlayer = base.declare(ludorum.Player, {
+var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
 	constructor: function CBRPlayer(params) {
 		ludorum.Player.call(this, params);
 		this.caseDB = params && params.caseDB;

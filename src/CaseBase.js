@@ -2,7 +2,7 @@
 
 A `CaseBase` holds all cases for a game.
 */
-var CaseBase = base.declare({
+var CaseBase = exports.CaseBase = base.declare({
 	constructor: function CaseBase(params) {
 		this.game = params && params.game;
 		if (params && typeof params.encoding === 'function') {
