@@ -4,8 +4,8 @@ A memory implementation of a `CaseBase`.
 */
 var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	constructor: function MemoryCaseBase(params) {
-		this.__cases__ = [];
 		CaseBase.call(this, params);
+		this.__cases__ = [];
 	},
 
 	cases: function cases() {
