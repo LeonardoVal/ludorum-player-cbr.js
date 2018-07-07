@@ -8,7 +8,7 @@ module.exports = function (grunt) {
 	require('creatartis-grunt').config(grunt, {
 		sourceNames: ['__prologue__', 
 			'CaseBase', 'CBRPlayer',
-			'dbs/MemoryCaseBase', 
+			'dbs/MemoryCaseBase', 'dbs/SQLiteCaseBase',
 			'__epilogue__'],
 		deps: [
 			{ id: 'creatartis-base', name: 'base' },
