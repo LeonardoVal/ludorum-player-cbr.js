@@ -249,8 +249,8 @@ A memory implementation of a `CaseBase`.
 */
 var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	constructor: function MemoryCaseBase(params) {
-		this.__cases__ = [];
 		CaseBase.call(this, params);
+		this.__cases__ = [];
 	},
 
 	cases: function cases() {
@@ -276,6 +276,135 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 		}
 	},
 }); // declare MemoryCaseBase
+
+/** # SQLiteCaseBase
+
+An implementation of a `CaseBase` using SQLite3 through `better-sqlite3`.
+*/
+exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
+	constructor: function SQLiteCaseBase(params) {
+		CaseBase.call(this, params);
+		this.__setupDatabase__(params);
+	},
+
+	__setupDatabase__: function __setupDatabase__(params) {
+		var game = this.game,
+			Database = this.Database || require('better-sqlite3');
+		this.__db__ = new Database(params.dbpath || './'+ game.name.toLowerCase() +'-cbr.sqlite');
+		var encoding = this.encoding(game, game.moves()),
+			featureColumns = encoding.features.map(function (_, i) {
+				return 'f'+ i;
+			}),
+			actionColumns = game.players.map(function (_, i) {
+				return 'a'+ i;
+			}),
+			resultColumns = base.Iterable.range(game.players.length)
+				.product(['won', 'tied', 'lost'])
+				.mapApply(function (p, rt) { // result columns
+					return rt + p;
+				}).toArray(),
+			columns = featureColumns.concat(actionColumns).concat(resultColumns);
+		var sql = 'CREATE TABLE IF NOT EXISTS Cases (key TEXT PRIMARY KEY, count INTEGER, '+
+			columns.map(function (colName) {
+				return colName +' INTEGER';
+			}).join(', ') +')';
+		this.__db__.prepare(sql).run();
+		this.__db__.register({ name: 'distance', deterministic: true, varargs: true },
+			this.__distanceFunction__(this.distance));
+	},
+
+	__distanceFunction__: function __distanceFunction__(df) {
+		df = df || this.distance;
+		var features1 = [], 
+			features2 = [];
+		return function () {
+			var middle = (arguments.length / 2) |0;
+			for (var i = 0; i < middle; i++) {
+				features1.push(arguments[i]);
+				features2.push(arguments[middle + i]);
+			}
+			return df(features1, features2);
+		};
+	}, 
+
+	__key__: function __key__(_case) {
+		var features = _case.features,
+			actions = _case.actions || this.game.players.map(function () {
+				return null;
+			});
+		return features.join(',') +':'+ actions.join(',');
+	},
+
+	addCase: function addCase(_case) {
+		var players = this.game.players,
+			caseKey = this.__key__(_case),
+			sql = 'INSERT OR IGNORE INTO Cases VALUES ('+ ['\''+ caseKey +'\'', 0]
+				.concat(_case.features.map(JSON.stringify))
+				.concat(_case.actions.map(JSON.stringify))
+				.concat(base.Iterable.repeat(0, players.length * 3).toArray())
+				.join(',') +')';
+		this.__db__.prepare(sql).run();
+		sql = 'UPDATE Cases SET count = count + 1, '+
+			players.map(function (p) {
+				var r = _case.result[p],
+					pi = players.indexOf(p);
+				return 'won'+ pi +' = won'+ pi +' + '+ r[0] +', '+
+					'tied'+ pi +' = tied'+ pi +' + '+ r[1] +', '+
+					'lost'+ pi +' = lost'+ pi +' + '+ r[2];
+			}).join(', ');
+		this.__db__.prepare(sql).run();
+	},
+
+	// Database use ///////////////////////////////////////////////////////////////////////////////
+
+	knn: function knn(n, game, role) {
+		var cdb = this,
+			roleIndex = game.players.indexOf(role),
+			data = this.encoding(game);
+		var resultSet = this.__db__.prepare('SELECT *, distance('+ 
+			data.features.map(function (_, i) {
+				return 'f'+ i;
+			}).join(', ') +', '+ data.features.join(', ') +') AS d '+
+			'FROM Cases WHERE a'+ roleIndex +' IS NOT NULL ORDER BY d LIMIT '+ n).all();
+		return resultSet.map(function (record) {
+			return {
+				count: record.count,
+				features: data.features.map(function (_, i) {
+					return record['f'+ i]; 
+				}),
+				actions: base.iterable(game.players).map(function (p, i) {
+					return [p, record['a'+ i]];
+				}).toObject(),
+				result: base.iterable(game.players).map(function (p, i) {
+					return [p, [record['won'+ i], record['tied'+ i], record['lost'+ i]]];
+				}).toObject(),
+				distance: record.d
+			};
+		});
+	},
+
+	// Utilities //////////////////////////////////////////////////////////////////////////////////
+
+	'static __SERMAT__': {
+		identifier: 'SQLiteCaseBase',
+		serializer: function serialize_SQLiteCaseBase(obj) {
+			return CaseBase.__SERMAT__.serialize_CaseBase(obj);
+		}
+	},
+}); // declare SQLiteCaseBase
+
+//FIXME For testing, please remove.
+
+exports.encodingTicTacToe = function encodingTicTacToe(game, moves) {
+	return {
+		features: game.board.split('').map(function (chr) {
+			return chr === 'X' ? 0 : chr === 'O' ? 1 : 0.5; 
+		}),
+		actions: !moves ? null : game.players.map(function (p) {
+			return moves.hasOwnProperty(p) ? moves[p] : null;
+		})
+	};
+};
 
 // See __prologue__.js
 	return exports;
