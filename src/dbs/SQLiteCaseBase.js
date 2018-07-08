@@ -58,8 +58,8 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 
 	addCase: function addCase(_case) {
 		var players = this.game.players,
-			caseKey = this.__key__(_case),
-			sql = 'INSERT OR IGNORE INTO Cases VALUES ('+ ['\''+ caseKey +'\'', 0]
+			caseKey = '\''+ this.__key__(_case) +'\'',
+			sql = 'INSERT OR IGNORE INTO Cases VALUES ('+ [caseKey, 0]
 				.concat(_case.features.map(JSON.stringify))
 				.concat(_case.actions.map(JSON.stringify))
 				.concat(base.Iterable.repeat(0, players.length * 3).toArray())
@@ -68,11 +68,19 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		sql = 'UPDATE Cases SET count = count + 1, '+
 			players.map(function (p) {
 				var r = _case.result[p],
-					pi = players.indexOf(p);
-				return 'won'+ pi +' = won'+ pi +' + '+ r[0] +', '+
-					'tied'+ pi +' = tied'+ pi +' + '+ r[1] +', '+
-					'lost'+ pi +' = lost'+ pi +' + '+ r[2];
-			}).join(', ');
+					pi = players.indexOf(p),
+					sets = [];
+				if (r[0]) {
+					sets.push('won'+ pi +' = won'+ pi +' + '+ r[0]);
+				}
+				if (r[1]) {
+					sets.push('tied'+ pi +' = tied'+ pi +' + '+ r[1]);
+				}
+				if (r[2]) {
+					sets.push('lost'+ pi +' = lost'+ pi +' + '+ r[2]);
+				}
+				return sets.join(', ');
+			}).join(', ') +' WHERE key = '+ caseKey;
 		this.__db__.prepare(sql).run();
 	},
 
@@ -85,3 +93,4 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		}
 	},
 }); // declare SQLiteCaseBase
+
