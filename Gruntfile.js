@@ -9,6 +9,7 @@ module.exports = function (grunt) {
 		sourceNames: ['__prologue__', 
 			'CaseBase', 'CBRPlayer',
 			'dbs/MemoryCaseBase', 'dbs/SQLiteCaseBase',
+			'utils',
 			'__epilogue__'],
 		deps: [
 			{ id: 'creatartis-base', name: 'base' },

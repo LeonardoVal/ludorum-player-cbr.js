@@ -19,5 +19,6 @@ function __init__(base, Sermat, ludorum) { "use strict";
 		__dependencies__: [base, Sermat, ludorum],
 		__SERMAT__: { include: [base, ludorum] },
 
-		dbs: { /* Namespace for different types of case bases. */ }
+		dbs: { /* Namespace for different types of case bases. */ },
+		utils: { /* Namespace for different utility functions and definitions. */ }
 	};
