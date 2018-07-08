@@ -1,42 +1,36 @@
 /** # CBR Player 
 
 */
-var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
+exports.CBRPlayer = base.declare(ludorum.Player, {
 	constructor: function CBRPlayer(params) {
 		ludorum.Player.call(this, params);
-		this.caseDB = params && params.caseDB;
-		this.caseN = params && params.caseN || 20;
-	},
-
-	evaluatedMoves: function evaluatedMoves(game, role) {
-		var caseDB = this.caseDB,
-			r = base.iterable(this.movesFor(game, role)).map(function (move) {
-				return [move +'', [move, 0]];
-			}).toObject();
-		base.iterable(caseDB.knn(this.caseN, game, role)).forEach(function (_case) {
-			var m = r[_case.actions[role]];
-			if (m) {
-				m[1] += (_case.result[role][0] - _case.result[role][2]) / 
-					_case.count; // / (_case.distance + 1);
-			}
-		});
-		return Object.values(r);
+		this.caseBase = params && params.caseBase;
+		this.k = params && params.k || 20;
 	},
 
 	decision: function decision(game, role) {
-		var evaluatedMoves = this.evaluatedMoves(game, role),
-			bestEval;
-		//console.log("evaluatedMoves "+ JSON.stringify(evaluatedMoves)); //FIXME
-		var bestMoves = base.iterable(evaluatedMoves).greater(function (t) {
-			return t[1];
-		}).map(function (t) {
-			bestEval = t[1];
-			return t[0];
-		});
-		//console.log("\t"+ bestMoves +"\t"+ bestEval);//FIXME
-		base.raiseIf(!bestMoves || !bestMoves.length, 
-			"No moves where selected at ", game, " for player ", role, "!");
-		return bestMoves.length === 1 ? bestMoves[0] : base.Randomness.DEFAULT.choice(bestMoves);
+		var actions = this.caseBase.actionEvaluations(game, role, { k: this.k }),
+			positiveActions = actions.filter(function (t) {
+				return t[1] > 0;
+			}),
+			negativeActions = actions.filter(function (t) {
+				return t[1] < 0;
+			}).map(function (t) {
+				return [t[0], -t[1]];
+			});
+		if (positiveActions.length < 1) {
+			if (negativeActions.length < 1) {
+				return this.random.choice(this.movesFor(game, role));
+			} else if (negativeActions.length === 1) {
+				return negativeActions[0][0];
+			} else {
+				return this.random.weightedChoice(this.random.normalizeWeights(negativeActions));
+			}
+		} else if (positiveActions.length === 1) {
+			return positiveActions[0][0];
+		} else {
+			return this.random.weightedChoice(this.random.normalizeWeights(positiveActions));
+		}
 	},
 
 	// Utilities. /////////////////////////////////////////////////////////////////////////////////
