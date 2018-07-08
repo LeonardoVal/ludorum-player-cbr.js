@@ -27,7 +27,8 @@ function __init__(base, Sermat, ludorum) { "use strict";
 		__dependencies__: [base, Sermat, ludorum],
 		__SERMAT__: { include: [base, ludorum] },
 
-		dbs: { /* Namespace for different types of case bases. */ }
+		dbs: { /* Namespace for different types of case bases. */ },
+		utils: { /* Namespace for different utility functions and definitions. */ }
 	};
 
 
@@ -40,6 +41,9 @@ var CaseBase = exports.CaseBase = base.declare({
 		this.game = params && params.game;
 		if (params && typeof params.encoding === 'function') {
 			this.encoding = params.encoding;
+		}
+		if (params && typeof params.distance === 'function') {
+			this.distance = params.distance;
 		}
 		this.random = params && params.random || Randomness.DEFAULT;
 	},
@@ -61,8 +65,8 @@ var CaseBase = exports.CaseBase = base.declare({
 	*/
 	distance: function distance(features1, features2) {
 		return base.Iterable.zip(features1, features2).mapApply(function (f1, f2) {
-			if (n1 !== null && !isNaN(n1) && n2 !== null && !isNaN(n2)) {
-				return Math.abs(n1 - n2);
+			if (f1 !== null && !isNaN(f1) && f2 !== null && !isNaN(f2)) {
+				return Math.abs(f1 - f2);
 			} else {
 				return 0;
 			}
@@ -148,26 +152,59 @@ var CaseBase = exports.CaseBase = base.declare({
 	/** The `cases` method returns the sequence of all cases in the database. Case order is not
 	defined.
 	*/
-	cases: unimplemented('CaseBase', 'cases()'),
+	cases: unimplemented('CaseBase', 'cases(filters)'),
 
 	/** The `nn` method returns the `k` neareast neighbours of the given game state. 
 	*/
 	nn: function nn(k, game) {
 		var cb = this,
 			gameCase = this.encoding(game),
-			cs = this.cases().map(function (_case, gameCase) {
+			cs = this.cases().map(function (_case) {
 				return [_case, cb.distance(_case.features, gameCase.features)];
 			}).sorted(function (c1, c2) {
 				return c1[1] - c2[1];
-			});
+			}).toArray();
 		return cs.slice(0, +k);
+	},
+
+	/**TODO
+	*/
+	actionEvaluations: function actionEvaluations(game, role, options) {
+		var cb = this,
+			k = options && +options.k || 10,
+			roleIndex = game.players.indexOf(role),
+			r = base.iterable(game.moves()[role]).map(function (move) {
+				return [move +'', [move, 0]];
+			}).toObject(),
+			knn = cb.nn(k, game);
+		iterable(knn).forEachApply(function (_case, distance) {
+			var m = r[_case.actions[roleIndex]];
+			if (m) {
+				m[1] += (_case.result[role][0] - _case.result[role][2]) / (1 + distance);
+			}
+		});
+		return Object.values(r);
+	},
+
+	/**TODO
+	*/
+	gameEvaluation: function gameEvaluation(game, role, options) {
+		var cb = this,
+			k = options && +options.k || 10,
+			r = base.iterable(game.moves()[role]).map(function (move) {
+				return [move +'', [move, 0]];
+			}).toObject(),
+			knn = cb.nn(k, game, role);
+		return iterable(knn).map(function (_case, distance) {
+			return (_case.result[role][0] - _case.result[role][2]) / (1 + distance);
+		}).sum();
 	},
 
 	/** ## Utilities ########################################################################### */
 
 	'static __SERMAT__': {
 		identifier: 'CaseBase',
-		serializer: function serialize_CaseBase(obj) {
+		serializer: function serialize_CaseBase(obj) { //FIXME
 			return [{
 				game: obj.game,
 				encoding: obj.hasOwnProperty('encoding') ? obj.encoding : null
@@ -179,42 +216,37 @@ var CaseBase = exports.CaseBase = base.declare({
 /** # CBR Player 
 
 */
-var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
+exports.CBRPlayer = base.declare(ludorum.Player, {
 	constructor: function CBRPlayer(params) {
 		ludorum.Player.call(this, params);
-		this.caseDB = params && params.caseDB;
-		this.caseN = params && params.caseN || 20;
-	},
-
-	evaluatedMoves: function evaluatedMoves(game, role) {
-		var caseDB = this.caseDB,
-			r = base.iterable(this.movesFor(game, role)).map(function (move) {
-				return [move +'', [move, 0]];
-			}).toObject();
-		base.iterable(caseDB.knn(this.caseN, game, role)).forEach(function (_case) {
-			var m = r[_case.actions[role]];
-			if (m) {
-				m[1] += (_case.result[role][0] - _case.result[role][2]) / 
-					_case.count; // / (_case.distance + 1);
-			}
-		});
-		return Object.values(r);
+		this.caseBase = params && params.caseBase;
+		this.k = params && params.k || 20;
 	},
 
 	decision: function decision(game, role) {
-		var evaluatedMoves = this.evaluatedMoves(game, role),
-			bestEval;
-		//console.log("evaluatedMoves "+ JSON.stringify(evaluatedMoves)); //FIXME
-		var bestMoves = base.iterable(evaluatedMoves).greater(function (t) {
-			return t[1];
-		}).map(function (t) {
-			bestEval = t[1];
-			return t[0];
-		});
-		//console.log("\t"+ bestMoves +"\t"+ bestEval);//FIXME
-		base.raiseIf(!bestMoves || !bestMoves.length, 
-			"No moves where selected at ", game, " for player ", role, "!");
-		return bestMoves.length === 1 ? bestMoves[0] : base.Randomness.DEFAULT.choice(bestMoves);
+		var actions = this.caseBase.actionEvaluations(game, role, { k: this.k }),
+			positiveActions = actions.filter(function (t) {
+				return t[1] > 0;
+			}),
+			negativeActions = actions.filter(function (t) {
+				return t[1] < 0;
+			}).map(function (t) {
+				return [t[0], -t[1]];
+			});
+		console.log(positiveActions, negativeActions);//FIXME
+		if (positiveActions.length < 1) {
+			if (negativeActions.length < 1) {
+				return this.random.choice(this.movesFor(game, role));
+			} else if (negativeActions.length === 1) {
+				return negativeActions[0][0];
+			} else {
+				return this.random.weightedChoice(this.random.normalizeWeights(negativeActions));
+			}
+		} else if (positiveActions.length === 1) {
+			return positiveActions[0][0];
+		} else {
+			return this.random.weightedChoice(this.random.normalizeWeights(positiveActions));
+		}
 	},
 
 	// Utilities. /////////////////////////////////////////////////////////////////////////////////
@@ -337,8 +369,8 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 
 	addCase: function addCase(_case) {
 		var players = this.game.players,
-			caseKey = this.__key__(_case),
-			sql = 'INSERT OR IGNORE INTO Cases VALUES ('+ ['\''+ caseKey +'\'', 0]
+			caseKey = '\''+ this.__key__(_case) +'\'',
+			sql = 'INSERT OR IGNORE INTO Cases VALUES ('+ [caseKey, 0]
 				.concat(_case.features.map(JSON.stringify))
 				.concat(_case.actions.map(JSON.stringify))
 				.concat(base.Iterable.repeat(0, players.length * 3).toArray())
@@ -347,41 +379,39 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		sql = 'UPDATE Cases SET count = count + 1, '+
 			players.map(function (p) {
 				var r = _case.result[p],
-					pi = players.indexOf(p);
-				return 'won'+ pi +' = won'+ pi +' + '+ r[0] +', '+
-					'tied'+ pi +' = tied'+ pi +' + '+ r[1] +', '+
-					'lost'+ pi +' = lost'+ pi +' + '+ r[2];
-			}).join(', ');
+					pi = players.indexOf(p),
+					sets = [];
+				if (r[0]) {
+					sets.push('won'+ pi +' = won'+ pi +' + '+ r[0]);
+				}
+				if (r[1]) {
+					sets.push('tied'+ pi +' = tied'+ pi +' + '+ r[1]);
+				}
+				if (r[2]) {
+					sets.push('lost'+ pi +' = lost'+ pi +' + '+ r[2]);
+				}
+				return sets.join(', ');
+			}).join(', ') +' WHERE key = '+ caseKey;
 		this.__db__.prepare(sql).run();
 	},
 
-	// Database use ///////////////////////////////////////////////////////////////////////////////
+	/* TODO SQL for evaluated actions
 
-	knn: function knn(n, game, role) {
-		var cdb = this,
-			roleIndex = game.players.indexOf(role),
-			data = this.encoding(game);
-		var resultSet = this.__db__.prepare('SELECT *, distance('+ 
-			data.features.map(function (_, i) {
-				return 'f'+ i;
-			}).join(', ') +', '+ data.features.join(', ') +') AS d '+
-			'FROM Cases WHERE a'+ roleIndex +' IS NOT NULL ORDER BY d LIMIT '+ n).all();
-		return resultSet.map(function (record) {
-			return {
-				count: record.count,
-				features: data.features.map(function (_, i) {
-					return record['f'+ i]; 
-				}),
-				actions: base.iterable(game.players).map(function (p, i) {
-					return [p, record['a'+ i]];
-				}).toObject(),
-				result: base.iterable(game.players).map(function (p, i) {
-					return [p, [record['won'+ i], record['tied'+ i], record['lost'+ i]]];
-				}).toObject(),
-				distance: record.d
-			};
-		});
-	},
+select a0, sum((won0-lost0)/(1.0+distance)) as eval1, sum(won0-lost0) as eval2
+from (select *, abs(f0-0.5)+abs(f1-0.5)+abs(f2-0.5)+abs(f3-0.5)+abs(f4-0.5)+abs(f5-0.5)+abs(f6-0.5)+abs(f7-0.5)+abs(f8-0.5) as distance
+ from Cases 
+ where a0 is not null and distance <= 1
+ order by distance limit 100)
+group by a0
+	
+select coalesce(a0, a1), sum((case a0 when null then won1-lost1 else won0-lost0 end)/(1.0+distance)) as eval1, sum(won0-lost0) as eval2
+from (select *, abs(f0-0.5)+abs(f1-0.5)+abs(f2-0.5)+abs(f3-0.5)+abs(f4-0.5)+abs(f5-0.5)+abs(f6-0.5)+abs(f7-0.5)+abs(f8-0.5) as distance
+ from Cases 
+ --where a0 is not null and distance <= 1
+ order by distance limit 50)
+group by coalesce(a0, a1)
+
+	*/
 
 	// Utilities //////////////////////////////////////////////////////////////////////////////////
 
@@ -393,17 +423,30 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 	},
 }); // declare SQLiteCaseBase
 
-//FIXME For testing, please remove.
 
-exports.encodingTicTacToe = function encodingTicTacToe(game, moves) {
-	return {
-		features: game.board.split('').map(function (chr) {
-			return chr === 'X' ? 0 : chr === 'O' ? 1 : 0.5; 
-		}),
-		actions: !moves ? null : game.players.map(function (p) {
-			return moves.hasOwnProperty(p) ? moves[p] : null;
-		})
-	};
+
+/** # Utilities
+
+*/
+
+/** This library provides some `encodings` for simple games in Ludorum for testing purposes.
+*/
+exports.utils.encodings = {
+	/** The `TicTacToe` encoding has 9 features, one per square in the board. Each feature has the
+	value of 0 if it is marked with an X, 1 if it is marked with an O, or 0.5 otherwise.
+
+	TicTacToe's actions are numbers, hence no transformation or encoding is required.
+	*/
+	TicTacToe: function encodingTicTacToe(game, moves) {
+		return {
+			features: game.board.split('').map(function (chr) {
+				return chr === 'X' ? 0 : chr === 'O' ? 1 : 0.5; 
+			}),
+			actions: !moves ? null : game.players.map(function (p) {
+				return moves.hasOwnProperty(p) ? moves[p] : null;
+			})
+		};
+	}
 };
 
 // See __prologue__.js
