@@ -8,6 +8,9 @@ var CaseBase = exports.CaseBase = base.declare({
 		if (params && typeof params.encoding === 'function') {
 			this.encoding = params.encoding;
 		}
+		if (params && typeof params.distance === 'function') {
+			this.distance = params.distance;
+		}
 		this.random = params && params.random || Randomness.DEFAULT;
 	},
 
@@ -28,8 +31,8 @@ var CaseBase = exports.CaseBase = base.declare({
 	*/
 	distance: function distance(features1, features2) {
 		return base.Iterable.zip(features1, features2).mapApply(function (f1, f2) {
-			if (n1 !== null && !isNaN(n1) && n2 !== null && !isNaN(n2)) {
-				return Math.abs(n1 - n2);
+			if (f1 !== null && !isNaN(f1) && f2 !== null && !isNaN(f2)) {
+				return Math.abs(f1 - f2);
 			} else {
 				return 0;
 			}
@@ -115,26 +118,59 @@ var CaseBase = exports.CaseBase = base.declare({
 	/** The `cases` method returns the sequence of all cases in the database. Case order is not
 	defined.
 	*/
-	cases: unimplemented('CaseBase', 'cases()'),
+	cases: unimplemented('CaseBase', 'cases(filters)'),
 
 	/** The `nn` method returns the `k` neareast neighbours of the given game state. 
 	*/
 	nn: function nn(k, game) {
 		var cb = this,
 			gameCase = this.encoding(game),
-			cs = this.cases().map(function (_case, gameCase) {
+			cs = this.cases().map(function (_case) {
 				return [_case, cb.distance(_case.features, gameCase.features)];
 			}).sorted(function (c1, c2) {
 				return c1[1] - c2[1];
-			});
+			}).toArray();
 		return cs.slice(0, +k);
+	},
+
+	/**TODO
+	*/
+	actionEvaluations: function actionEvaluations(game, role, options) {
+		var cb = this,
+			k = options && +options.k || 10,
+			roleIndex = game.players.indexOf(role),
+			r = base.iterable(game.moves()[role]).map(function (move) {
+				return [move +'', [move, 0]];
+			}).toObject(),
+			knn = cb.nn(k, game);
+		iterable(knn).forEachApply(function (_case, distance) {
+			var m = r[_case.actions[roleIndex]];
+			if (m) {
+				m[1] += (_case.result[role][0] - _case.result[role][2]) / (1 + distance);
+			}
+		});
+		return Object.values(r);
+	},
+
+	/**TODO
+	*/
+	gameEvaluation: function gameEvaluation(game, role, options) {
+		var cb = this,
+			k = options && +options.k || 10,
+			r = base.iterable(game.moves()[role]).map(function (move) {
+				return [move +'', [move, 0]];
+			}).toObject(),
+			knn = cb.nn(k, game, role);
+		return iterable(knn).map(function (_case, distance) {
+			return (_case.result[role][0] - _case.result[role][2]) / (1 + distance);
+		}).sum();
 	},
 
 	/** ## Utilities ########################################################################### */
 
 	'static __SERMAT__': {
 		identifier: 'CaseBase',
-		serializer: function serialize_CaseBase(obj) {
+		serializer: function serialize_CaseBase(obj) { //FIXME
 			return [{
 				game: obj.game,
 				encoding: obj.hasOwnProperty('encoding') ? obj.encoding : null
