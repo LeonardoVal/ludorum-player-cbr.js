@@ -18,7 +18,15 @@ define(['creatartis-base', 'ludorum', 'ludorum-player-cbr'], function (base, lud
 		it("encoding", function () {
 			var _case0 = ludorumCBR.utils.encodings.TicTacToe(game);
 			expect(Array.isArray(_case0.features)).toBe(true);
-			expect(_case0.features.join('|')).toBe('0.5|0.5|0.5|0.5|0.5|0.5|0.5|0.5|0.5');
+			expect(_case0.features.join('|')).toBe('0|0|0|0|0|0|0|0|0');
+			var game1 = game.next({ Xs: 4 }),
+				_case1 = ludorumCBR.utils.encodings.TicTacToe(game1);
+			expect(Array.isArray(_case1.features)).toBe(true);
+			expect(_case1.features.join('|')).toBe('0|0|0|0|1|0|0|0|0');
+			var game2 = game1.next({ Os: 0 }),
+				_case2 = ludorumCBR.utils.encodings.TicTacToe(game2);
+			expect(Array.isArray(_case2.features)).toBe(true);
+			expect(_case2.features.join('|')).toBe('2|0|0|0|1|0|0|0|0');
 		});
 
 		it("populate MemoryCaseBase", function (done) {

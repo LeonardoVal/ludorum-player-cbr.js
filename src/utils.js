@@ -10,10 +10,11 @@ exports.utils.encodings = {
 
 	TicTacToe's actions are numbers, hence no transformation or encoding is required.
 	*/
-	TicTacToe: function encodingTicTacToe(game, moves) {
+	TicTacToe: function encodingTicTacToe(game, moves, ply) {
 		return {
+			ply: ply,
 			features: game.board.split('').map(function (chr) {
-				return chr === 'X' ? 0 : chr === 'O' ? 1 : 0.5; 
+				return chr === 'X' ? 1 : chr === 'O' ? 2 : 0; 
 			}),
 			actions: !moves ? null : game.players.map(function (p) {
 				return moves.hasOwnProperty(p) ? moves[p] : null;
