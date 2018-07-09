@@ -3,3 +3,4 @@ docs/docker/
 node_modules/
 npm-debug.log
 **/*.sqlite
+**/*.sqlite-journal
