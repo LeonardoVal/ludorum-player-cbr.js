@@ -108,7 +108,10 @@ var CaseBase = exports.CaseBase = base.declare({
 		var cdb = this,
 			i = 0;
 		return Future.sequence(matches, function (match) {
-			//TODO Use options.logger // if ((++i) % 10 === 0) console.log('Training reached '+ i +' matches. '+ (new Date())); //FIXME
+			i++;
+			if (options.logger && i % 10 === 0) {
+				options.logger.info('Training reached '+ i +' matches.');
+			}
 			return cdb.addMatch(match, options);
 		});
 	},
@@ -153,7 +156,7 @@ var CaseBase = exports.CaseBase = base.declare({
 	nn: function nn(k, game) {
 		var cb = this,
 			gameCase = this.encoding(game),
-			cs = this.cases().map(function (_case) {
+			cs = iterable(this.cases()).map(function (_case) {
 				return [_case, cb.distance(_case.features, gameCase.features)];
 			}).sorted(function (c1, c2) {
 				return c1[1] - c2[1];
@@ -211,47 +214,61 @@ var CaseBase = exports.CaseBase = base.declare({
 
 */
 exports.CBRPlayer = base.declare(ludorum.Player, {
+	/** 
+	*/
 	constructor: function CBRPlayer(params) {
 		ludorum.Player.call(this, params);
 		this.caseBase = params && params.caseBase;
 		this.k = params && params.k || 20;
 	},
 
+	/** A `CBRPlayer` takes the action evaluations from the case base, and splits them into actions
+	with possitive evaluations and the ones with evaluations less than or equal to zero. If there
+	are possitively evaluated actions, one of these is chosen randomly with a probability 
+	proportional to the evaluation. If all actions have non possitive evaluations, one of these is
+	chosen with a probability inversely proportional to the evaluation.   
+	*/
 	decision: function decision(game, role) {
-		var actions = this.caseBase.actionEvaluations(game, role, { k: this.k }),
-			positiveActions = actions.filter(function (t) {
+		var actions = iterable(this.movesFor(game, role)).map(function (action) {
+				return [action +'', [action, 0]];
+			}).toObject();
+		this.caseBase.actionEvaluations(game, role, { k: this.k }).forEach(function (t) {
+			var entry = actions[t[0] +''];
+			if (entry) {
+				entry[1] += t[1];
+			}
+		});
+		var minEval = +Infinity,
+			positiveActions = Object.values(actions).filter(function (t) {
+				minEval = Math.min(minEval, t[1]);
 				return t[1] > 0;
 			}),
-			negativeActions = actions.filter(function (t) {
-				return t[1] < 0;
+			negativeActions = Object.values(actions).filter(function (t) {
+				return t[1] <= 0;
 			}).map(function (t) {
-				return [t[0], -t[1]];
-			});
-		console.log(positiveActions, negativeActions);//FIXME
-		if (positiveActions.length < 1) {
-			if (negativeActions.length < 1) {
-				return this.random.choice(this.movesFor(game, role));
-			} else if (negativeActions.length === 1) {
-				return negativeActions[0][0];
-			} else {
-				return this.random.weightedChoice(this.random.normalizeWeights(negativeActions));
-			}
+				return [t[0], t[1] - minEval];
+			}),
+			result;
+		if (positiveActions.length > 1) {
+			result = this.random.weightedChoice(this.random.normalizeWeights(positiveActions));
 		} else if (positiveActions.length === 1) {
-			return positiveActions[0][0];
+			result = positiveActions[0][0];
 		} else {
-			return this.random.weightedChoice(this.random.normalizeWeights(positiveActions));
+			result = this.random.weightedChoice(this.random.normalizeWeights(negativeActions));
 		}
+		return result;
 	},
 
 	// Utilities. /////////////////////////////////////////////////////////////////////////////////
 
-	assess: function assess(game, player, n) {
+	assess: function assess(player, options) {
 		var cbrPlayer = this,
+			game = this.caseBase.game,
 			evaluation = base.iterable(game.players).map(function (p) {
 				return [p, [0,0,0]];
 			}).toObject(),
-			players = base.Iterable.repeat(player, game.players.length).toArray();
-		n = +n || 100;
+			players = base.Iterable.repeat(player, game.players.length).toArray(),
+			n = options && +options.n || 150;
 		return base.Future.sequence(base.Iterable.range(n), function (i) {
 			var matchPlayers = players.slice(),
 				playerIndex = i % game.players.length,
@@ -259,7 +276,9 @@ exports.CBRPlayer = base.declare(ludorum.Player, {
 			matchPlayers[playerIndex] = cbrPlayer;
 			var match = new ludorum.Match(game, matchPlayers);
 			return match.run().then(function () {
-				//console.log("Match #"+ i +":\n\t"+ match.history.map((g) => g.board).join("\n\t"));//FIXME
+				if (options.logger && i % 10 === 0) {
+					options.logger.info("Assessment ran "+ i +" matches.");
+				}
 				var r = match.result()[playerRole];
 				evaluation[playerRole][r > 0 ? 0 : r < 0 ? 2 : 1]++;
 			});
@@ -308,37 +327,55 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 An implementation of a `CaseBase` using SQLite3 through `better-sqlite3`.
 */
 exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
+	/** 
+	*/
 	constructor: function SQLiteCaseBase(params) {
 		CaseBase.call(this, params);
 		this.__setupDatabase__(params);
 	},
 
+	/** ## Database setup ###################################################################### */
+
+	/**
+	*/
 	__setupDatabase__: function __setupDatabase__(params) {
 		var game = this.game,
 			Database = this.Database || require('better-sqlite3');
 		this.__db__ = new Database(params.dbpath || './'+ game.name.toLowerCase() +'-cbr.sqlite');
-		var encoding = this.encoding(game, game.moves()),
-			featureColumns = encoding.features.map(function (_, i) {
-				return 'f'+ i;
-			}),
-			actionColumns = game.players.map(function (_, i) {
-				return 'a'+ i;
-			}),
-			resultColumns = base.Iterable.range(game.players.length)
-				.product(['won', 'tied', 'lost'])
-				.mapApply(function (p, rt) { // result columns
-					return rt + p;
-				}).toArray(),
-			columns = featureColumns.concat(actionColumns).concat(resultColumns);
-		var sql = 'CREATE TABLE IF NOT EXISTS Cases (key TEXT PRIMARY KEY, count INTEGER, '+
-			columns.map(function (colName) {
-				return colName +' INTEGER';
-			}).join(', ') +')';
-		this.__db__.prepare(sql).run();
+		this.__tableName__ = params.tableName || 'CB_'+ game.name;
+		var encoding = this.encoding(game, game.moves());
+		this.__featureColumns__ = encoding.features.map(function (_, i) {
+			return 'f'+ i;
+		});
+		this.__actionColumns__ = game.players.map(function (_, i) {
+			return 'a'+ i;
+		});
+		this.__resultColumns__ = base.Iterable.range(game.players.length)
+			.product(['won', 'tied', 'lost'])
+			.mapApply(function (p, rt) { // result columns
+				return rt + p;
+			}).toArray();
+		var columns = this.__featureColumns__
+				.concat(this.__actionColumns__)
+				.concat(this.__resultColumns__),
+			sql = 'CREATE TABLE IF NOT EXISTS '+ this.__tableName__ +
+				'(key TEXT PRIMARY KEY, count INTEGER, '+
+				columns.map(function (colName) {
+					return colName +' INTEGER';
+				}).join(', ') +')';
+		try {
+			this.__db__.prepare(sql).run();
+		} catch (err) {
+			throw new Error("Error while creating table. SQL: `"+ sql +"`!");
+		}
 		this.__db__.register({ name: 'distance', deterministic: true, varargs: true },
 			this.__distanceFunction__(this.distance));
 	},
 
+	/** The distance function of the case base is used in many SQL statements sent to the database.
+	Since SQLite functions cannot handle arrays, a variadic form that takes both feature arrays in
+	a chain is built.
+	*/
 	__distanceFunction__: function __distanceFunction__(df) {
 		df = df || this.distance;
 		var features1 = [], 
@@ -353,6 +390,11 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		};
 	}, 
 
+	/** ## Cases ############################################################################### */
+
+	/** The cases table's primary key is a string that identifies the case. By default, the 
+	concatenation of feature values and actions values is used.
+	*/
 	__key__: function __key__(_case) {
 		var features = _case.features,
 			actions = _case.actions || this.game.players.map(function () {
@@ -364,13 +406,13 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 	addCase: function addCase(_case) {
 		var players = this.game.players,
 			caseKey = '\''+ this.__key__(_case) +'\'',
-			sql = 'INSERT OR IGNORE INTO Cases VALUES ('+ [caseKey, 0]
+			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' VALUES ('+ [caseKey, 0]
 				.concat(_case.features.map(JSON.stringify))
 				.concat(_case.actions.map(JSON.stringify))
 				.concat(base.Iterable.repeat(0, players.length * 3).toArray())
 				.join(',') +')';
 		this.__db__.prepare(sql).run();
-		sql = 'UPDATE Cases SET count = count + 1, '+
+		sql = 'UPDATE '+ this.__tableName__ +' SET count = count + 1, '+
 			players.map(function (p) {
 				var r = _case.result[p],
 					pi = players.indexOf(p),
@@ -387,6 +429,24 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 				return sets.join(', ');
 			}).join(', ') +' WHERE key = '+ caseKey;
 		this.__db__.prepare(sql).run();
+	},
+
+	cases: function cases(filters) {
+		var cb = this,
+			sql = 'SELECT * FROM '+ this.__tableName__; //TODO Filters
+		return this.__db__.prepare(sql).all().map(function (record) {
+			return {
+				features: cb.__featureColumns__.map(function (col) {
+					return record[col];
+				}),
+				actions: cb.__actionColumns__.map(function (col) {
+					return record[col];
+				}),
+				result: iterable(cb.game.players).map(function (player, i) {
+					return [player, [record['won'+ i], record['tied'+ i], record['lost'+ i]]];
+				}).toObject()
+			};
+		});
 	},
 
 	/* TODO SQL for evaluated actions
