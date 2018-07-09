@@ -52,8 +52,7 @@ var CaseBase = exports.CaseBase = base.declare({
 		//TODO options.
 		var cdb = this;
 		return match.run().then(function () {
-			var result = match.result(),
-				i = 0;
+			var result = match.result();
 			cdb.game.players.forEach(function (p) {
 				result[p] = [
 					result[p] > 0 ? 1 : 0,
@@ -61,10 +60,9 @@ var CaseBase = exports.CaseBase = base.declare({
 					result[p] < 0 ? 1 : 0,
 				];
 			});
-			match.history.forEach(function (entry) {
+			match.history.forEach(function (entry, i) {
 				if (entry.moves) {
 					var _case = cdb.encoding(entry.state, entry.moves, i);
-					i++;
 					_case.result = result;
 					cdb.addCase(_case);
 				}
