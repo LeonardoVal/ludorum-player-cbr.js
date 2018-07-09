@@ -80,8 +80,7 @@ var CaseBase = exports.CaseBase = base.declare({
 		//TODO options.
 		var cdb = this;
 		return match.run().then(function () {
-			var result = match.result(),
-				i = 0;
+			var result = match.result();
 			cdb.game.players.forEach(function (p) {
 				result[p] = [
 					result[p] > 0 ? 1 : 0,
@@ -89,10 +88,9 @@ var CaseBase = exports.CaseBase = base.declare({
 					result[p] < 0 ? 1 : 0,
 				];
 			});
-			match.history.forEach(function (entry) {
+			match.history.forEach(function (entry, i) {
 				if (entry.moves) {
 					var _case = cdb.encoding(entry.state, entry.moves, i);
-					i++;
 					_case.result = result;
 					cdb.addCase(_case);
 				}
@@ -110,7 +108,7 @@ var CaseBase = exports.CaseBase = base.declare({
 		return Future.sequence(matches, function (match) {
 			i++;
 			if (options.logger && i % 10 === 0) {
-				options.logger.info('Training reached '+ i +' matches.');
+				options.logger.info('Added '+ i +' matches.');
 			}
 			return cdb.addMatch(match, options);
 		});
@@ -276,7 +274,7 @@ exports.CBRPlayer = base.declare(ludorum.Player, {
 			matchPlayers[playerIndex] = cbrPlayer;
 			var match = new ludorum.Match(game, matchPlayers);
 			return match.run().then(function () {
-				if (options.logger && i % 10 === 0) {
+				if (options.logger && i > 0 && i % 10 === 0) {
 					options.logger.info("Assessment ran "+ i +" matches.");
 				}
 				var r = match.result()[playerRole];
@@ -359,7 +357,7 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 				.concat(this.__actionColumns__)
 				.concat(this.__resultColumns__),
 			sql = 'CREATE TABLE IF NOT EXISTS '+ this.__tableName__ +
-				'(key TEXT PRIMARY KEY, count INTEGER, '+
+				'(key TEXT PRIMARY KEY, count INTEGER, ply REAL, '+
 				columns.map(function (colName) {
 					return colName +' INTEGER';
 				}).join(', ') +')';
@@ -406,13 +404,14 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 	addCase: function addCase(_case) {
 		var players = this.game.players,
 			caseKey = '\''+ this.__key__(_case) +'\'',
-			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' VALUES ('+ [caseKey, 0]
+			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' VALUES ('+ [caseKey, 0, 0]
 				.concat(_case.features.map(JSON.stringify))
 				.concat(_case.actions.map(JSON.stringify))
 				.concat(base.Iterable.repeat(0, players.length * 3).toArray())
 				.join(',') +')';
 		this.__db__.prepare(sql).run();
-		sql = 'UPDATE '+ this.__tableName__ +' SET count = count + 1, '+
+		sql = 'UPDATE '+ this.__tableName__ +' '+
+			'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
 			players.map(function (p) {
 				var r = _case.result[p],
 					pi = players.indexOf(p),
@@ -431,41 +430,43 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		this.__db__.prepare(sql).run();
 	},
 
-	cases: function cases(filters) {
-		var cb = this,
-			sql = 'SELECT * FROM '+ this.__tableName__; //TODO Filters
-		return this.__db__.prepare(sql).all().map(function (record) {
-			return {
-				features: cb.__featureColumns__.map(function (col) {
-					return record[col];
-				}),
-				actions: cb.__actionColumns__.map(function (col) {
-					return record[col];
-				}),
-				result: iterable(cb.game.players).map(function (player, i) {
-					return [player, [record['won'+ i], record['tied'+ i], record['lost'+ i]]];
-				}).toObject()
-			};
-		});
+	__row2case__: function __row2case__(row) {
+		return {
+			ply: row.ply,
+			features: this.__featureColumns__.map(function (col) {
+				return row[col];
+			}),
+			actions: this.__actionColumns__.map(function (col) {
+				return row[col];
+			}),
+			result: iterable(this.game.players).map(function (player, i) {
+				return [player, [row['won'+ i], row['tied'+ i], row['lost'+ i]]];
+			}).toObject()
+		};
 	},
 
-	/* TODO SQL for evaluated actions
+	cases: function cases(filters) {
+		var sql = 'SELECT * FROM '+ this.__tableName__; //TODO Filters
+		return this.__db__.prepare(sql).all().map(this.__row2case__.bind(this));
+	},
 
-select a0, sum((won0-lost0)/(1.0+distance)) as eval1, sum(won0-lost0) as eval2
-from (select *, abs(f0-0.5)+abs(f1-0.5)+abs(f2-0.5)+abs(f3-0.5)+abs(f4-0.5)+abs(f5-0.5)+abs(f6-0.5)+abs(f7-0.5)+abs(f8-0.5) as distance
- from Cases 
- where a0 is not null and distance <= 1
- order by distance limit 100)
-group by a0
-	
-select coalesce(a0, a1), sum((case a0 when null then won1-lost1 else won0-lost0 end)/(1.0+distance)) as eval1, sum(won0-lost0) as eval2
-from (select *, abs(f0-0.5)+abs(f1-0.5)+abs(f2-0.5)+abs(f3-0.5)+abs(f4-0.5)+abs(f5-0.5)+abs(f6-0.5)+abs(f7-0.5)+abs(f8-0.5) as distance
- from Cases 
- --where a0 is not null and distance <= 1
- order by distance limit 50)
-group by coalesce(a0, a1)
+	__nn_sql__: function __nn_sql__(k, game) {
+		var gameCase = this.encoding(game);
+		return 'SELECT *, ('+ 
+			Iterable.zip(this.__featureColumns__, gameCase.features).mapApply(function (v1, v2) {
+				return v2 !== null && !isNaN(v2) ? 'abs(ifnull('+ v1 +'-'+ v2 +',0))' : '0';
+			}).join('+') +') AS distance '+
+			'FROM '+ this.__tableName__ +' '+
+			'ORDER BY distance ASC LIMIT '+ k;
+	},
 
-	*/
+	nn: function nn(k, game) {
+		var cb = this,
+			sql = this.__nn_sql__(k, game);
+		return this.__db__.prepare(sql).all().map(function (row) {
+			return [cb.__row2case__(row), row.distance];
+		});
+	},
 
 	// Utilities //////////////////////////////////////////////////////////////////////////////////
 
@@ -491,10 +492,11 @@ exports.utils.encodings = {
 
 	TicTacToe's actions are numbers, hence no transformation or encoding is required.
 	*/
-	TicTacToe: function encodingTicTacToe(game, moves) {
+	TicTacToe: function encodingTicTacToe(game, moves, ply) {
 		return {
+			ply: ply,
 			features: game.board.split('').map(function (chr) {
-				return chr === 'X' ? 0 : chr === 'O' ? 1 : 0.5; 
+				return chr === 'X' ? 1 : chr === 'O' ? 2 : 0; 
 			}),
 			actions: !moves ? null : game.players.map(function (p) {
 				return moves.hasOwnProperty(p) ? moves[p] : null;
