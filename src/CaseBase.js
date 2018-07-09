@@ -80,7 +80,10 @@ var CaseBase = exports.CaseBase = base.declare({
 		var cdb = this,
 			i = 0;
 		return Future.sequence(matches, function (match) {
-			//TODO Use options.logger // if ((++i) % 10 === 0) console.log('Training reached '+ i +' matches. '+ (new Date())); //FIXME
+			i++;
+			if (options.logger && i % 10 === 0) {
+				options.logger.info('Added '+ i +' matches.');
+			}
 			return cdb.addMatch(match, options);
 		});
 	},
@@ -125,7 +128,7 @@ var CaseBase = exports.CaseBase = base.declare({
 	nn: function nn(k, game) {
 		var cb = this,
 			gameCase = this.encoding(game),
-			cs = this.cases().map(function (_case) {
+			cs = iterable(this.cases()).map(function (_case) {
 				return [_case, cb.distance(_case.features, gameCase.features)];
 			}).sorted(function (c1, c2) {
 				return c1[1] - c2[1];
