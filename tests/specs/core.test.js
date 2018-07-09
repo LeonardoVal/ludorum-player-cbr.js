@@ -51,7 +51,7 @@ define(['creatartis-base', 'ludorum', 'ludorum-player-cbr'], function (base, lud
 					game: game, 
 					encoding: ludorumCBR.utils.encodings.TicTacToe 
 				});
-			memCB.populate({ n: 10 }).then(function () {
+			memCB.populate({ n: 5 }).then(function () {
 				var cbrPlayer = new ludorumCBR.CBRPlayer({ caseBase: memCB, k: 5 }),
 					match = new ludorum.Match(game, [cbrPlayer, cbrPlayer]);
 				match.run().then(function () {
