@@ -102,7 +102,7 @@ var CaseBase = exports.CaseBase = base.declare({
 		options = options || {};
 		var cdb = this,
 			game = options.game || this.game,
-			n = options.n || 100,
+			n = isNaN(options.n) ? 100 : +options.n,
 			players = options.players || [new ludorum.players.RandomPlayer()],
 			matchups = Iterable.product.apply(Iterable, 
 				Iterable.repeat(players, game.players.length).toArray()
