@@ -130,7 +130,7 @@ var CaseBase = exports.CaseBase = base.declare({
 		options = options || {};
 		var cdb = this,
 			game = options.game || this.game,
-			n = options.n || 100,
+			n = isNaN(options.n) ? 100 : +options.n,
 			players = options.players || [new ludorum.players.RandomPlayer()],
 			matchups = Iterable.product.apply(Iterable, 
 				Iterable.repeat(players, game.players.length).toArray()
@@ -341,7 +341,7 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 			Database = this.Database || require('better-sqlite3');
 		this.__db__ = new Database(params.dbpath || './'+ game.name.toLowerCase() +'-cbr.sqlite');
 		this.__db__.pragma('journal_mode = OFF'); // Disable transactions.
-		this.__db__.pragma('cache_size = -32000'); // Increase default cache size.
+		this.__db__.pragma('cache_size = -128000'); // Increase default cache size.
 		this.__db__.pragma('encoding = "UTF-8"'); // Increase default cache size.
 
 		this.__tableName__ = params.tableName || 'CB_'+ game.name;
