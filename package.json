@@ -28,13 +28,14 @@
 	],
 	"dependencies": {
 		"creatartis-base": "~0.1.8",
-		"ludorum": "~0.2.1-beta",
+		"ludorum": "~0.2.1",
 		"sermat": "~0.0.9"
 	},
 	"devDependencies": {
 		"creatartis-grunt": "~0.0.14",
 		"better-sqlite3": "~4.1.4",
-		"@creatartis/ludorum-game-mancala": "~0.1.1"
+		"@creatartis/ludorum-game-mancala": "~0.1.1",
+		"@creatartis/ludorum-game-connect4": "~0.1.1"
 	},
 	"scripts": {
 		"test": "grunt"
