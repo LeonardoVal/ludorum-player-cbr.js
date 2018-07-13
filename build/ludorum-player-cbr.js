@@ -179,9 +179,12 @@ var CaseBase = exports.CaseBase = base.declare({
 			}).toObject(),
 			knn = cb.nn(k, game);
 		iterable(knn).forEachApply(function (_case, distance) {
-			var m = r[_case.actions[roleIndex]];
+			var m = r[_case.actions[roleIndex]],
+				supp;
 			if (m) {
-				m[1] += (_case.result[role][0] - _case.result[role][2]) / (1 + distance);
+				supp = _case.result[role][0] + _case.result[role][1] + _case.result[role][2];
+				m[1] += supp * (_case.result[role][0] - _case.result[role][2]) / 
+					(10 + supp) / (1 + distance);
 			}
 		});
 		return Object.values(r);
