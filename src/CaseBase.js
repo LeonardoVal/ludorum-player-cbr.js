@@ -141,11 +141,11 @@ var CaseBase = exports.CaseBase = base.declare({
 			k = options && +options.k || 10,
 			roleIndex = game.players.indexOf(role),
 			r = base.iterable(game.moves()[role]).map(function (move) {
-				return [move +'', [move, 0]];
+				return [JSON.stringify(move), [move, 0]];
 			}).toObject(),
 			knn = cb.nn(k, game);
 		iterable(knn).forEachApply(function (_case, distance) {
-			var m = r[_case.actions[roleIndex]],
+			var m = r[JSON.stringify(_case.actions[roleIndex])],
 				supp;
 			if (m) {
 				supp = _case.result[role][0] + _case.result[role][1] + _case.result[role][2];
@@ -158,11 +158,11 @@ var CaseBase = exports.CaseBase = base.declare({
 
 	/**TODO
 	*/
-	gameEvaluation: function gameEvaluation(game, role, options) {
+	gameEvaluation: function gameEvaluation(game, role, options) { //FIXME
 		var cb = this,
 			k = options && +options.k || 10,
 			r = base.iterable(game.moves()[role]).map(function (move) {
-				return [move +'', [move, 0]];
+				return [JSON.stringify(move), [move, 0]];
 			}).toObject(),
 			knn = cb.nn(k, game, role);
 		return iterable(knn).map(function (_case, distance) {
