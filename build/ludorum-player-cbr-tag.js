@@ -169,11 +169,11 @@ var CaseBase = exports.CaseBase = base.declare({
 			k = options && +options.k || 10,
 			roleIndex = game.players.indexOf(role),
 			r = base.iterable(game.moves()[role]).map(function (move) {
-				return [move +'', [move, 0]];
+				return [JSON.stringify(move), [move, 0]];
 			}).toObject(),
 			knn = cb.nn(k, game);
 		iterable(knn).forEachApply(function (_case, distance) {
-			var m = r[_case.actions[roleIndex]],
+			var m = r[JSON.stringify(_case.actions[roleIndex])],
 				supp;
 			if (m) {
 				supp = _case.result[role][0] + _case.result[role][1] + _case.result[role][2];
@@ -186,11 +186,11 @@ var CaseBase = exports.CaseBase = base.declare({
 
 	/**TODO
 	*/
-	gameEvaluation: function gameEvaluation(game, role, options) {
+	gameEvaluation: function gameEvaluation(game, role, options) { //FIXME
 		var cb = this,
 			k = options && +options.k || 10,
 			r = base.iterable(game.moves()[role]).map(function (move) {
-				return [move +'', [move, 0]];
+				return [JSON.stringify(move), [move, 0]];
 			}).toObject(),
 			knn = cb.nn(k, game, role);
 		return iterable(knn).map(function (_case, distance) {
@@ -360,12 +360,12 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 			.mapApply(function (p, rt) { // result columns
 				return rt + p;
 			}).toArray();
-		var columns = this.__featureColumns__
-				.concat(this.__actionColumns__)
-				.concat(this.__resultColumns__),
-			sql = 'CREATE TABLE IF NOT EXISTS '+ this.__tableName__ +
+		var sql = 'CREATE TABLE IF NOT EXISTS '+ this.__tableName__ +
 				'(key TEXT PRIMARY KEY, count INTEGER, ply REAL, '+
-				columns.map(function (colName) {
+				this.__actionColumns__.map(function (colName) {
+					return colName +' TEXT';
+				}).join(', ') +', '+
+				this.__resultColumns__.concat(this.__featureColumns__).map(function (colName) {
 					return colName +' INTEGER';
 				}).join(', ') +')';
 		try {
@@ -410,31 +410,40 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 
 	addCase: function addCase(_case) {
 		var players = this.game.players,
-			caseKey = '\''+ this.__key__(_case) +'\'',
-			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' VALUES ('+ [caseKey, 0, 0]
-				.concat(_case.features.map(JSON.stringify))
-				.concat(_case.actions.map(JSON.stringify))
-				.concat(base.Iterable.repeat(0, players.length * 3).toArray())
-				.join(',') +')';
-		this.__db__.prepare(sql).run();
-		sql = 'UPDATE '+ this.__tableName__ +' '+
-			'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
-			players.map(function (p) {
-				var r = _case.result[p],
-					pi = players.indexOf(p),
-					sets = [];
-				if (r[0]) {
-					sets.push('won'+ pi +' = won'+ pi +' + '+ r[0]);
-				}
-				if (r[1]) {
-					sets.push('tied'+ pi +' = tied'+ pi +' + '+ r[1]);
-				}
-				if (r[2]) {
-					sets.push('lost'+ pi +' = lost'+ pi +' + '+ r[2]);
-				}
-				return sets.join(', ');
-			}).join(', ') +' WHERE key = '+ caseKey;
-		this.__db__.prepare(sql).run();
+			caseKey = this.__key__(_case),
+			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' VALUES ('+ 
+				Iterable.repeat('?', 3 + this.__actionColumns__.length + 
+					this.__resultColumns__.length + this.__featureColumns__.length).join(',') +')',
+			sqlStmt = this.__db__.prepare(sql),
+			isNew = sqlStmt.run.apply(sqlStmt, [caseKey, 1, _case.ply]
+				.concat(_case.actions.map(function (action) {
+					return action === null ? null : JSON.stringify(action);
+				}))
+				.concat(Iterable.chain.apply(Iterable, players.map(function (p) {
+					return _case.result[p];
+				})).toArray())
+				.concat(_case.features)
+			).changes > 0;
+		if (!isNew) { // Insert was ignored because the case is already stored.
+			sql = 'UPDATE '+ this.__tableName__ +' '+
+				'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
+				players.map(function (p) {
+					var r = _case.result[p],
+						pi = players.indexOf(p),
+						sets = [];
+					if (r[0]) {
+						sets.push('won'+ pi +' = won'+ pi +' + '+ r[0]);
+					}
+					if (r[1]) {
+						sets.push('tied'+ pi +' = tied'+ pi +' + '+ r[1]);
+					}
+					if (r[2]) {
+						sets.push('lost'+ pi +' = lost'+ pi +' + '+ r[2]);
+					}
+					return sets.join(', ');
+				}).join(', ') +' WHERE key = \''+ caseKey +'\'';
+			this.__db__.prepare(sql).run();
+		}
 	},
 
 	__row2case__: function __row2case__(row) {
@@ -444,7 +453,7 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 				return row[col];
 			}),
 			actions: this.__actionColumns__.map(function (col) {
-				return row[col];
+				return JSON.parse(row[col]);
 			}),
 			result: iterable(this.game.players).map(function (player, i) {
 				return [player, [row['won'+ i], row['tied'+ i], row['lost'+ i]]];
