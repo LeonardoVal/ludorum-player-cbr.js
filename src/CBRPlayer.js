@@ -1,7 +1,7 @@
 /** # CBR Player 
 
 */
-exports.CBRPlayer = base.declare(ludorum.Player, {
+var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
 	/** 
 	*/
 	constructor: function CBRPlayer(params) {
@@ -49,28 +49,42 @@ exports.CBRPlayer = base.declare(ludorum.Player, {
 
 	// Utilities. /////////////////////////////////////////////////////////////////////////////////
 
-	assess: function assess(player, options) {
+	assess: function assess(players, options) {
+		if (!Array.isArray(players)) {
+			players = [players];
+		}
 		var cbrPlayer = this,
 			game = this.caseBase.game,
-			evaluation = base.iterable(game.players).map(function (p) {
-				return [p, [0,0,0]];
-			}).toObject(),
-			players = base.Iterable.repeat(player, game.players.length).toArray(),
-			n = options && +options.n || 150;
-		return base.Future.sequence(base.Iterable.range(n), function (i) {
-			var matchPlayers = players.slice(),
-				playerIndex = i % game.players.length,
+			evaluation = iterable(players).map(function (player) {
+				return [player.name, iterable(game.players).map(function (p) {
+						return [p, [0,0,0]];
+					}).toObject()];
+				}).toObject(),
+			n = options && +options.n || 300,
+			finishedMatchesCount = 0,
+			intervalId = 0;
+		if (options.logger) {
+			intervalId = setInterval(function () {
+				options.logger.info("Assessment finished "+ finishedMatchesCount +" matches.");
+			}, options.logTime || 30000);
+		}
+		return base.Future.sequence(base.Iterable.range(n).product(players), function (tuple) {
+			var player = tuple[1],
+				matchPlayers = base.Iterable.repeat(player, game.players.length).toArray(),
+				playerIndex = tuple[0] % game.players.length,
 				playerRole = game.players[playerIndex];
 			matchPlayers[playerIndex] = cbrPlayer;
 			var match = new ludorum.Match(game, matchPlayers);
 			return match.run().then(function () {
-				if (options.logger && i > 0 && i % 10 === 0) {
-					options.logger.info("Assessment ran "+ i +" matches.");
-				}
 				var r = match.result()[playerRole];
-				evaluation[playerRole][r > 0 ? 0 : r < 0 ? 2 : 1]++;
+				evaluation[player.name][playerRole][r > 0 ? 0 : r < 0 ? 2 : 1]++;
+				finishedMatchesCount++;
 			});
 		}).then(function () {
+			clearInterval(intervalId);
+			if (options.logger) {
+				options.logger.info("Assessment finished "+ finishedMatchesCount +" matches.");
+			}
 			return evaluation;
 		});
 	}
