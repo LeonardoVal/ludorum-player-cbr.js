@@ -76,13 +76,22 @@ var CaseBase = exports.CaseBase = base.declare({
 	*/
 	addMatches: function addMatches(matches, options) {
 		var cdb = this,
-			i = 0;
+			matchCount = 0,
+			intervalId = 0;
+		if (options.logger) {
+			intervalId = setInterval(function () {
+				options.logger.info("Added "+ matchCount +" matches.");
+			}, options.logTime || 30000);
+		}
 		return Future.sequence(matches, function (match) {
-			i++;
-			if (options.logger && i % 10 === 0) {
-				options.logger.info('Added '+ i +' matches.');
-			}
+			matchCount++;
 			return cdb.addMatch(match, options);
+		}).then(function (r) {
+			if (options.logger) {
+				options.logger.info("Added "+ matchCount +" matches.");
+			}
+			clearInterval(intervalId);
+			return r;
 		});
 	},
 
@@ -94,23 +103,28 @@ var CaseBase = exports.CaseBase = base.declare({
 
 	+ `n`: The number of matches to run; 100 by default.
 
-	+ `players`: The players to use to play the matches. A random player is used by default.
+	+ `trainer`: The player to use agains the opponents. A random player is used by default.
 
-	The result is a promise.
+	+ `players`: The trainer's opponents to use to play the matches. The trainer is used by default.
+
+	Other options are passed to the `addMatches` method. The result is a promise.
 	*/
 	populate: function populate(options) {
 		options = options || {};
 		var cdb = this,
 			game = options.game || this.game,
 			n = isNaN(options.n) ? 100 : +options.n,
-			players = options.players || [new ludorum.players.RandomPlayer()],
-			matchups = Iterable.product.apply(Iterable, 
-				Iterable.repeat(players, game.players.length).toArray()
-			).toArray();
+			trainer = options.trainer || new ludorum.players.RandomPlayer({ name: 'RandomPlayer' }),
+			players = options.players || [trainer];
+		if (!Array.isArray(players)) {
+			players = [players];
+		}
+		var tournament = new ludorum.tournaments.Measurement(game, trainer, players, 1),
+			matchups = tournament.__matches__().toArray();
 		return this.addMatches(Iterable.range(Math.ceil(n / matchups.length))
 			.product(matchups)
-			.mapApply(function (i, players) {
-				return new ludorum.Match(game, players);
+			.mapApply(function (i, match) {
+				return new ludorum.Match(game, match.players);
 			}), options);
 	},
 
