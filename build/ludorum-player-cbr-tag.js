@@ -498,7 +498,7 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		var gameCase = this.encoding(game);
 		return 'SELECT *, ('+ 
 			Iterable.zip(this.__featureColumns__, gameCase.features).mapApply(function (v1, v2) {
-				return v2 !== null && !isNaN(v2) ? 'abs(ifnull('+ v1 +'-'+ v2 +',0))' : '0';
+				return v2 !== null && !isNaN(v2) ? 'abs(ifnull('+ v1 +'-('+ v2 +'),0))' : '0';
 			}).join('+') +') AS distance '+
 			'FROM '+ this.__tableName__ +' '+
 			'ORDER BY distance ASC LIMIT '+ k;
