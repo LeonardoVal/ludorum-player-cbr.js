@@ -363,18 +363,23 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		this.__setupDatabase__(params);
 	},
 
-	/** ## Database setup ###################################################################### */
+	/** ## Database setup and management ####################################################### */
 
 	/**
 	*/
 	__setupDatabase__: function __setupDatabase__(params) {
 		var game = this.game,
 			Database = this.Database || require('better-sqlite3');
-		this.__db__ = new Database(params.dbpath || './'+ game.name.toLowerCase() +'-cbr.sqlite');
-		this.__db__.pragma('journal_mode = OFF'); // Disable transactions.
-		this.__db__.pragma('cache_size = -128000'); // Increase default cache size.
-		this.__db__.pragma('encoding = "UTF-8"'); // Increase default cache size.
-
+		if (params.db instanceof Database) {
+			this.__db__ = params.db;
+		} else {
+			this.__db__ = new Database(typeof params.db === 'string' ? params.db : 
+				'./'+ game.name.toLowerCase() +'-cbr.sqlite');
+			this.__db__.pragma('journal_mode = OFF'); // Disable transactions.
+			this.__db__.pragma('cache_size = -128000'); // Increase default cache size.
+			this.__db__.pragma('encoding = "UTF-8"'); // Increase default cache size.
+		}
+		
 		this.__tableName__ = params.tableName || 'CB_'+ game.name;
 		var encoding = this.encoding(game, game.moves());
 		this.__featureColumns__ = encoding.features.map(function (_, i) {
@@ -388,21 +393,46 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 			.mapApply(function (p, rt) { // result columns
 				return rt + p;
 			}).toArray();
-		var sql = 'CREATE TABLE IF NOT EXISTS '+ this.__tableName__ +
-				'(key TEXT PRIMARY KEY, count INTEGER, ply REAL, '+
-				this.__actionColumns__.map(function (colName) {
-					return colName +' TEXT';
-				}).join(', ') +', '+
-				this.__resultColumns__.concat(this.__featureColumns__).map(function (colName) {
-					return colName +' INTEGER';
-				}).join(', ') +')';
-		try {
-			this.__db__.prepare(sql).run();
-		} catch (err) {
-			throw new Error("Error while creating table. SQL: `"+ sql +"`!");
-		}
+		this.__createTable__();
 		this.__db__.register({ name: 'distance', deterministic: true, varargs: true },
 			this.__distanceFunction__(this.distance));
+	},
+
+	__createTable__: function __createTable__(tableName, featureColumns, actionColumns, resultColumns) {
+		tableName = tableName || this.__tableName__;
+		featureColumns = featureColumns || this.__featureColumns__;
+		actionColumns = actionColumns || this.__actionColumns__;
+		resultColumns = resultColumns || this.__resultColumns__;
+
+		return this.__runSQL__('CREATE TABLE IF NOT EXISTS '+ tableName +
+			'(key TEXT PRIMARY KEY, count INTEGER, ply REAL, '+
+			actionColumns.map(function (colName) {
+				return colName +' TEXT';
+			}).join(', ') +', '+
+			resultColumns.concat(featureColumns).map(function (colName) {
+				return colName +' INTEGER';
+			}).join(', ') +
+		')');
+	},
+
+	__runSQL__: function __runSQL__(sql) {
+		var args = Array.prototype.slice.call(arguments, 1);
+		try {
+			var stmt = this.__db__.prepare(sql);
+			return stmt.run.apply(stmt, args);
+		} catch (err) {
+			throw new Error("Error executing `"+ sql +"` "+ JSON.stringify(args) +"!");
+		}
+	},
+
+	__getSQL__: function __getSQL__(sql) {
+		var args = Array.prototype.slice.call(arguments, 1);
+		try {
+			var stmt = this.__db__.prepare(sql);
+			return stmt.all.apply(stmt, args);
+		} catch (err) {
+			throw new Error("Error querying `"+ sql +"` "+ JSON.stringify(args) +"!");
+		}
 	},
 
 	/** The distance function of the case base is used in many SQL statements sent to the database.
@@ -442,8 +472,7 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' VALUES ('+ 
 				Iterable.repeat('?', 3 + this.__actionColumns__.length + 
 					this.__resultColumns__.length + this.__featureColumns__.length).join(',') +')',
-			sqlStmt = this.__db__.prepare(sql),
-			isNew = sqlStmt.run.apply(sqlStmt, [caseKey, 1, _case.ply]
+			isNew = this.__runSQL__(sql, [caseKey, 1, _case.ply]
 				.concat(_case.actions.map(function (action) {
 					return action === null ? null : JSON.stringify(action);
 				}))
@@ -453,7 +482,7 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 				.concat(_case.features)
 			).changes > 0;
 		if (!isNew) { // Insert was ignored because the case is already stored.
-			sql = 'UPDATE '+ this.__tableName__ +' '+
+			this.__runSQL__('UPDATE '+ this.__tableName__ +' '+
 				'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
 				players.map(function (p) {
 					var r = _case.result[p],
@@ -469,8 +498,8 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 						sets.push('lost'+ pi +' = lost'+ pi +' + '+ r[2]);
 					}
 					return sets.join(', ');
-				}).join(', ') +' WHERE key = \''+ caseKey +'\'';
-			this.__db__.prepare(sql).run();
+				}).join(', ') +' WHERE key = \''+ caseKey +'\''
+			);
 		}
 	},
 
@@ -490,8 +519,8 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 	},
 
 	cases: function cases(filters) {
-		var sql = 'SELECT * FROM '+ this.__tableName__; //TODO Filters
-		return this.__db__.prepare(sql).all().map(this.__row2case__.bind(this));
+		return this.__getSQL__('SELECT * FROM '+ this.__tableName__) //TODO Filters
+			.map(this.__row2case__.bind(this));
 	},
 
 	__nn_sql__: function __nn_sql__(k, game) {
