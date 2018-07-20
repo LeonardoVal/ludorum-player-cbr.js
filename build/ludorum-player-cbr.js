@@ -194,11 +194,18 @@ var CaseBase = exports.CaseBase = base.declare({
 			knn = cb.nn(k, game);
 		iterable(knn).forEachApply(function (_case, distance) {
 			var m = r[JSON.stringify(_case.actions[roleIndex])],
-				supp;
+				result = _case.result[role],
+				ev, support, ratio;
 			if (m) {
-				supp = _case.result[role][0] + _case.result[role][1] + _case.result[role][2];
-				m[1] += supp * (_case.result[role][0] - _case.result[role][2]) / 
-					(10 + supp) / (1 + distance);
+				support = _case.count / (10 + _case.count);
+				ratio = (result[0] + result[2] && 
+					((result[0] - result[2]) / (result[0] + result[2])));
+				ev = support * ratio * (1 / (1 + distance));
+				if (isNaN(ev)) {
+					raise("Action evaluation is NaN for case: ", JSON.stringify(_case),
+						" (distance= ", distance, ")!");
+				}
+				m[1] += ev;
 			}
 		});
 		return Object.values(r);
@@ -331,6 +338,7 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	constructor: function MemoryCaseBase(params) {
 		CaseBase.call(this, params);
 		this.__cases__ = [];
+		this.__index__ = {};
 	},
 
 	cases: function cases() {
@@ -340,6 +348,8 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	addCase: function addCase(_case) {
 		//TODO Check `_case` properties.
 		var entry = {
+			count: _case.count || 0,
+			ply: _case.ply,
 			features: Sermat.clone(_case.features || null),
 			actions: Sermat.clone(_case.actions || null),
 			result: Sermat.clone(_case.result || null)
@@ -511,6 +521,7 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 
 	__row2case__: function __row2case__(row) {
 		return {
+			count: row.count,
 			ply: row.ply,
 			features: this.__featureColumns__.map(function (col) {
 				return row[col];
