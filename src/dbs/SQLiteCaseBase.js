@@ -152,6 +152,7 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 
 	__row2case__: function __row2case__(row) {
 		return {
+			count: row.count,
 			ply: row.ply,
 			features: this.__featureColumns__.map(function (col) {
 				return row[col];
