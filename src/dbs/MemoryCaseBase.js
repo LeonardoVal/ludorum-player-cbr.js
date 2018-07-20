@@ -6,6 +6,7 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	constructor: function MemoryCaseBase(params) {
 		CaseBase.call(this, params);
 		this.__cases__ = [];
+		this.__index__ = {};
 	},
 
 	cases: function cases() {
@@ -15,6 +16,8 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	addCase: function addCase(_case) {
 		//TODO Check `_case` properties.
 		var entry = {
+			count: _case.count || 0,
+			ply: _case.ply,
 			features: Sermat.clone(_case.features || null),
 			actions: Sermat.clone(_case.actions || null),
 			result: Sermat.clone(_case.result || null)
