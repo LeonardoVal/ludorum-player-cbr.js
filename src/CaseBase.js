@@ -160,11 +160,18 @@ var CaseBase = exports.CaseBase = base.declare({
 			knn = cb.nn(k, game);
 		iterable(knn).forEachApply(function (_case, distance) {
 			var m = r[JSON.stringify(_case.actions[roleIndex])],
-				supp;
+				result = _case.result[role],
+				ev, support, ratio;
 			if (m) {
-				supp = _case.result[role][0] + _case.result[role][1] + _case.result[role][2];
-				m[1] += supp * (_case.result[role][0] - _case.result[role][2]) / 
-					(10 + supp) / (1 + distance);
+				support = _case.count / (10 + _case.count);
+				ratio = (result[0] + result[2] && 
+					((result[0] - result[2]) / (result[0] + result[2])));
+				ev = support * ratio * (1 / (1 + distance));
+				if (isNaN(ev)) {
+					raise("Action evaluation is NaN for case: ", JSON.stringify(_case),
+						" (distance= ", distance, ")!");
+				}
+				m[1] += ev;
 			}
 		});
 		return Object.values(r);
