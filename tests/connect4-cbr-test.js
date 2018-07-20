@@ -38,20 +38,22 @@ var GAME = new connect4.ConnectFour(),
 		db: 'dbs/'+ GAME.name.toLowerCase() +'-cbr.sqlite',
 		tableName: 'CB_'+ GAME.name
 	}),
+	CBR10 = new ludorumCBR.CBRPlayer({ name: 'CBR10', caseBase: CDB, k: 10 }),
+	CBR20 = new ludorumCBR.CBRPlayer({ name: 'CBR20', caseBase: CDB, k: 20 }),
 	CBR30 = new ludorumCBR.CBRPlayer({ name: 'CBR30', caseBase: CDB, k: 30 });
 LOGGER.appendToConsole();
 LOGGER.appendToFile(base.Text.formatDate(new Date(), '"logs/connect4-cbr-test-"yyyymmdd-hhnnss".log"'));
 
 // Case base stuffing //////////////////////////////////////////////////////////////////////////////
 
-var PLAYERS = [RANDOM, CBR30],
+var PLAYERS = [RANDOM, CBR10, CBR20, CBR30],
 	OPPONENTS = [RANDOM, MCTS10, MCTS50];
 
 LOGGER.info("Populating case base for "+ GAME.name +" with: "+ PLAYERS.map(function (p) {
 	return p.name;
 }).join(', ') +".");
 return CDB.populate({ 
-	n: 500,
+	n: 5000,
 	trainer: CBR30,
 	players: PLAYERS,
 	logger: LOGGER 
