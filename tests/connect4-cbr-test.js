@@ -59,7 +59,15 @@ return CDB.populate({
 	logger: LOGGER 
 }).then(function () {
 	LOGGER.info("Evaluating CBRPlayer for "+ GAME.name +".");
-	return CBR30.assess(OPPONENTS, { n: 600, logger: LOGGER }).then(function (evaluation) {
-			LOGGER.info("Assessment: "+ JSON.stringify(evaluation));
+	return CBR10.assess(OPPONENTS, { n: 600, logger: LOGGER }).then(function (evaluation) {
+		LOGGER.info("Assessment CBR10: "+ JSON.stringify(evaluation));
+	}).then(function () {
+		return CBR20.assess(OPPONENTS, { n: 600, logger: LOGGER }).then(function (evaluation) {
+			LOGGER.info("Assessment CBR20: "+ JSON.stringify(evaluation));
 		});
+	}).then(function () {
+		return CBR30.assess(OPPONENTS, { n: 600, logger: LOGGER }).then(function (evaluation) {
+			LOGGER.info("Assessment CBR30: "+ JSON.stringify(evaluation));
+		});
+	});
 }).then(process.exit);
