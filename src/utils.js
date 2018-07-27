@@ -14,7 +14,7 @@ exports.utils.encodings = {
 		return {
 			ply: ply,
 			features: game.board.split('').map(function (chr) {
-				return chr === 'X' ? 1 : chr === 'O' ? 2 : 0; 
+				return chr === 'X' ? (+1) : chr === 'O' ? (-1) : 0; 
 			}),
 			actions: !moves ? null : game.players.map(function (p) {
 				return moves.hasOwnProperty(p) ? moves[p] : null;

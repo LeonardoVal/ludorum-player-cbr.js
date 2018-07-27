@@ -26,7 +26,7 @@ define(['creatartis-base', 'ludorum', 'ludorum-player-cbr'], function (base, lud
 			var game2 = game1.next({ Os: 0 }),
 				_case2 = ludorumCBR.utils.encodings.TicTacToe(game2);
 			expect(Array.isArray(_case2.features)).toBe(true);
-			expect(_case2.features.join('|')).toBe('2|0|0|0|1|0|0|0|0');
+			expect(_case2.features.join('|')).toBe('-1|0|0|0|1|0|0|0|0');
 		});
 
 		it("populate MemoryCaseBase", function (done) {
