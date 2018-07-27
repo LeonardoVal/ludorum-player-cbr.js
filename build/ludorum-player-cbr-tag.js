@@ -96,6 +96,9 @@ var CaseBase = exports.CaseBase = base.declare({
 					_case = cdb.encoding(entry.state, entry.moves, i);
 					_case.result = result;
 					cdb.addCase(_case);
+					if (+options.retainThreshold > cdb.nn(1, entry.state)[0][1]) {
+						break;
+					}
 				}
 			}
 			return match;

@@ -53,9 +53,10 @@ LOGGER.info("Populating case base for "+ GAME.name +" with: "+ PLAYERS.map(funct
 	return p.name;
 }).join(', ') +".");
 return CDB.populate({ 
-	n: 5000,
-	trainer: CBR30,
-	players: PLAYERS,
+	n: 5000, 
+	trainer: CBR30, 
+	players: PLAYERS, 
+	retainThreshold: 2,
 	logger: LOGGER 
 }).then(function () {
 	LOGGER.info("Evaluating CBRPlayer for "+ GAME.name +".");
