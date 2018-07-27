@@ -86,7 +86,9 @@ var CaseBase = exports.CaseBase = base.declare({
 		//TODO options.
 		var cdb = this;
 		return match.run().then(function () {
-			var result = match.result();
+			var result = match.result(),
+				history = match.history,
+				entry, _case;
 			cdb.game.players.forEach(function (p) {
 				result[p] = [
 					result[p] > 0 ? 1 : 0,
@@ -94,13 +96,14 @@ var CaseBase = exports.CaseBase = base.declare({
 					result[p] < 0 ? 1 : 0,
 				];
 			});
-			match.history.forEach(function (entry, i) {
+			for (var i = history.length - 1; i >= 0; i--) {
+				entry = history[i];
 				if (entry.moves) {
-					var _case = cdb.encoding(entry.state, entry.moves, i);
+					_case = cdb.encoding(entry.state, entry.moves, i);
 					_case.result = result;
 					cdb.addCase(_case);
 				}
-			});
+			}
 			return match;
 		});
 	},
