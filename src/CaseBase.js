@@ -49,12 +49,12 @@ var CaseBase = exports.CaseBase = base.declare({
 	database. It returns a promise.
 	*/
 	addMatch: function addMatch(match, options) {
-		//TODO options.
-		var cdb = this;
+		var cdb = this,
+			retainThreshold = +options.retainThreshold || 0;
 		return match.run().then(function () {
 			var result = match.result(),
 				history = match.history,
-				entry, _case;
+				entry, _case, breakStoring;
 			cdb.game.players.forEach(function (p) {
 				result[p] = [
 					result[p] > 0 ? 1 : 0,
@@ -67,8 +67,10 @@ var CaseBase = exports.CaseBase = base.declare({
 				if (entry.moves) {
 					_case = cdb.encoding(entry.state, entry.moves, i);
 					_case.result = result;
+					breakStoring = retainThreshold !== 0 &&
+						retainThreshold > cdb.closestDistance(entry.state);
 					cdb.addCase(_case);
-					if (+options.retainThreshold > cdb.nn(1, entry.state)[0][1]) {
+					if (breakStoring) {
 						break;
 					}
 				}
@@ -152,6 +154,14 @@ var CaseBase = exports.CaseBase = base.declare({
 				return c1[1] - c2[1];
 			}).toArray();
 		return cs.slice(0, +k);
+	},
+
+	/** The `closestDistance` method returns the distance to the closest case in the case base from
+	the given game state.
+	*/
+	closestDistance: function closestDistance(game) {
+		var closest = this.nn(1, game);
+		return closest.length === 0 ? Infinity : closest[0][1];
 	},
 
 	/**TODO
