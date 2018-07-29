@@ -83,12 +83,12 @@ var CaseBase = exports.CaseBase = base.declare({
 	database. It returns a promise.
 	*/
 	addMatch: function addMatch(match, options) {
-		//TODO options.
-		var cdb = this;
+		var cdb = this,
+			retainThreshold = +options.retainThreshold || 0;
 		return match.run().then(function () {
 			var result = match.result(),
 				history = match.history,
-				entry, _case;
+				entry, _case, breakStoring;
 			cdb.game.players.forEach(function (p) {
 				result[p] = [
 					result[p] > 0 ? 1 : 0,
@@ -101,8 +101,10 @@ var CaseBase = exports.CaseBase = base.declare({
 				if (entry.moves) {
 					_case = cdb.encoding(entry.state, entry.moves, i);
 					_case.result = result;
+					breakStoring = retainThreshold !== 0 &&
+						retainThreshold > cdb.closestDistance(entry.state);
 					cdb.addCase(_case);
-					if (+options.retainThreshold > cdb.nn(1, entry.state)[0][1]) {
+					if (breakStoring) {
 						break;
 					}
 				}
@@ -188,6 +190,14 @@ var CaseBase = exports.CaseBase = base.declare({
 		return cs.slice(0, +k);
 	},
 
+	/** The `closestDistance` method returns the distance to the closest case in the case base from
+	the given game state.
+	*/
+	closestDistance: function closestDistance(game) {
+		var closest = this.nn(1, game);
+		return closest.length === 0 ? Infinity : closest[0][1];
+	},
+
 	/**TODO
 	*/
 	actionEvaluations: function actionEvaluations(game, role, options) {
@@ -256,6 +266,22 @@ var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
 		this.k = params && params.k || 20;
 	},
 
+	/** 
+	*/
+	checkMoves: function checkMoves(game, role) {
+		var r = [[], []];
+		this.movesFor(game, role).forEach(function (move) {
+			var game2 = game.perform(move, role),
+				result = game2.result();
+			if (!result) {
+				r[1].push(move); // Not a losing move.
+			} else if (result[role] > 0) {
+				r[0].push(move); // Winning move.
+			}
+		});
+		return r;
+	},
+
 	/** A `CBRPlayer` takes the action evaluations from the case base, and splits them into actions
 	with possitive evaluations and the ones with evaluations less than or equal to zero. If there
 	are possitively evaluated actions, one of these is chosen randomly with a probability 
@@ -263,7 +289,17 @@ var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
 	chosen with a probability inversely proportional to the evaluation.   
 	*/
 	decision: function decision(game, role) {
-		var actions = iterable(this.movesFor(game, role)).map(function (action) {
+		var checkMoves = this.checkMoves(game, role);
+		if (checkMoves[0].length > 0) {
+			return this.random.choice(checkMoves[0]);
+		} else if (checkMoves[1].length < 2) {
+			if (checkMoves[1].length === 1) {
+				return checkMoves[1][0];
+			} else { // if (checkMoves[1].length < 1)
+				return this.random.choice(this.movesFor(game, role));
+			}
+		}
+		var actions = iterable(checkMoves[1]).map(function (action) {
 				return [action +'', [action, 0]];
 			}).toObject();
 		this.caseBase.actionEvaluations(game, role, { k: this.k }).forEach(function (t) {
