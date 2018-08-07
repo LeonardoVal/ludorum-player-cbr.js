@@ -76,10 +76,11 @@ var playerConverter = (player) => player.substring(0,1);
 var encodingTicTacToeAbstract = function(game,moves,ply){
 	//The game uses Xs and Os for players, we need them to match the simbols in the board
 	var player = playerConverter(ply);
+	var feature = getFeature(game.board,player);
 
 	return{
 		ply: ply,
-		features: getFeature(game.board,player),
+		features: feature.totalFreeAdyacentCount.concat(feature.linesLenghtcount),
 		actions: moves.map((concreteAction) => concreteActionToAbstractAction(game.board,player,concreteAction)),
 	}
 }
