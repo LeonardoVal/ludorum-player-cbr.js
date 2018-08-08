@@ -78,11 +78,17 @@ var encodingTicTacToeAbstract = function(game,moves,ply){
 	var player = playerConverter(ply);
 	var feature = getFeature(game.board,player);
 
+	var abstractActions = game.players.map(function(p){
+		return moves[p].map((concreteAction) => concreteActionToAbstractAction(game.board,player,concreteAction))
+	})
+
 	return{
 		ply: ply,
 		features: feature.totalFreeAdyacentCount.concat(feature.linesLenghtcount),
-		actions: moves.map((concreteAction) => concreteActionToAbstractAction(game.board,player,concreteAction)),
+		actions: abstractActions
 	}
 }
 
-module.exports = encodingTicTacToeAbstract;
+var actionDecodingTicTacToeAbstract = abstractActionToConcreteAction;
+
+//module.exports = encodingTicTacToeAbstract;

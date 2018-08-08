@@ -11,6 +11,9 @@ var CaseBase = exports.CaseBase = base.declare({
 		if (params && typeof params.distance === 'function') {
 			this.distance = params.distance;
 		}
+		if (params && typeof params.actionDecoding === 'function') {
+			this.actionDecoding = params.actionDecoding;
+		}
 		this.random = params && params.random || Randomness.DEFAULT;
 	},
 
@@ -174,7 +177,7 @@ var CaseBase = exports.CaseBase = base.declare({
 				return [JSON.stringify(move), [move, 0]];
 			}).toObject(),
 			knn = cb.nn(k, game);
-		iterable(knn).forEachApply(function (_case, distance) {
+		iterable(knn).forEachApply(function (_case, distance) {			
 			var m = r[JSON.stringify(_case.actions[roleIndex])],
 				result = _case.result[role],
 				ev, support, ratio;
@@ -190,6 +193,7 @@ var CaseBase = exports.CaseBase = base.declare({
 				m[1] += ev;
 			}
 		});
+		//console.log(Object.values(r));
 		return Object.values(r);
 	},
 

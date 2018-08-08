@@ -1,8 +1,14 @@
 ﻿/** Gruntfile for [ludorum-player-cbr.js](http://github.com/LeonardoVal/ludorum-player-cbr.js).
 */
+
 module.exports = function (grunt) {
 	grunt.initConfig({
 		pkg: grunt.file.readJSON('package.json'),
+		jshint: {
+			options:{
+				"esversion": 6
+			}
+    	},
 	});
 
 	require('creatartis-grunt').config(grunt, {
@@ -10,7 +16,9 @@ module.exports = function (grunt) {
 			'CaseBase', 'CBRPlayer',
 			'dbs/MemoryCaseBase', 'dbs/SQLiteCaseBase',
 			'utils',
-			'__epilogue__'],
+			'gamesEncodings/ticTacToeAbstract',
+			'__epilogue__',
+			],
 		deps: [
 			{ id: 'creatartis-base', name: 'base' },
 			{ id: 'sermat', name: 'Sermat',
