@@ -28,7 +28,8 @@ function __init__(base, Sermat, ludorum) { "use strict";
 		__SERMAT__: { include: [base, ludorum] },
 
 		dbs: { /* Namespace for different types of case bases. */ },
-		utils: { /* Namespace for different utility functions and definitions. */ }
+		utils: { /* Namespace for different utility functions and definitions. */ },
+		encodings: { /* Namespace for different game encodings. */ }
 	};
 
 
@@ -620,121 +621,128 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 
 */
 
-/** This library provides some `encodings` for simple games in Ludorum for testing purposes.
-*/
-exports.utils.encodings = {
-	/** The `TicTacToe` encoding has 9 features, one per square in the board. Each feature has the
-	value of 0 if it is marked with an X, 1 if it is marked with an O, or 0.5 otherwise.
+//TODO
 
-	TicTacToe's actions are numbers, hence no transformation or encoding is required.
-	*/
-	TicTacToe: function encodingTicTacToe(game, moves, ply) {
-		return {
-			ply: ply,
-			features: game.board.split('').map(function (chr) {
-				return chr === 'X' ? (+1) : chr === 'O' ? (-1) : 0; 
-			}),
-			actions: !moves ? null : game.players.map(function (p) {
-				return moves.hasOwnProperty(p) ? moves[p] : null;
-			})
-		};
-	}
+/** # TicTacToe direct encoding
+
+The `TicTacToe` encoding has 9 features, one per square in the board. Each feature has the value of 
+0 if it is marked with an X, 1 if it is marked with an O, or 0.5 otherwise.
+
+TicTacToe's actions are numbers, hence no transformation or encoding is required.
+*/
+exports.encodings.TicTacToe.direct = function encodingTicTacToe(game, moves, ply) {
+	return {
+		ply: ply,
+		
+		features: game.board.split('').map(function (chr) {
+			return chr === 'X' ? (+1) : chr === 'O' ? (-1) : 0; 
+		}),
+
+		actions: !moves ? null : game.players.map(function (p) {
+			return moves.hasOwnProperty(p) ? moves[p] : null;
+		})
+	};
 };
 
-var posibleLines = [ [0,3,6], [0,4,8], [0,1,2], [1,4,7], [2,4,6], [2,5,8], [3,4,5], [8,7,6] ];
-var adyacents = [ [1,4,3], [0,3,4,5,2], [1,4,5], [0,1,4,7,6], [0,1,2,3,5,6,7,8], [1,2,4,7,8], [3,4,7], [6,3,4,5,8], [7,4,5] ];
+/** # TicTacToe direct encoding
 
-var getFreeAdyacentsCountPerCell = function(board, index){
-	board = board.split('');
-	if(board[index] === '_'){
-		return adyacents[index].map((cellIndex) => board[cellIndex] === '_' ? 1 : 0).reduce((acumulator,current) => acumulator+current);
-	}
-	else{
-		return 0;
-	}
-}
+*/
+exports.encodings.TicTacToe.abstract = (function () {
+	var posibleLines = [ [0,3,6], [0,4,8], [0,1,2], [1,4,7], [2,4,6], [2,5,8], [3,4,5], [8,7,6] ];
+	var adyacents = [ [1,4,3], [0,3,4,5,2], [1,4,5], [0,1,4,7,6], [0,1,2,3,5,6,7,8], [1,2,4,7,8], [3,4,7], [6,3,4,5,8], [7,4,5] ];
 
-var totalFreeAdyacentCount = function(board){
-	var adyacentsCountPerCell = [...Array(9).keys()].map((i) => getFreeAdyacentsCountPerCell(board, i));
-	var totalAdyacentCount = [...Array(9).keys()];
-	totalAdyacentCount = totalAdyacentCount.map((x) => adyacentsCountPerCell.filter((adyacentCount) => adyacentCount == x ? true : false).length );	
-	return totalAdyacentCount;
-}
+	var getFreeAdyacentsCountPerCell = function(board, index){
+		board = board.split('');
+		if(board[index] === '_'){
+			return adyacents[index].map((cellIndex) => board[cellIndex] === '_' ? 1 : 0).reduce((acumulator,current) => acumulator+current);
+		}
+		else{
+			return 0;
+		}
+	};
 
-var lineLength = function(board,player,line){
-	return line.reduce( (acumulator,current) => (board[acumulator]==-1) ? -1 : (board[current]===player) ? acumulator = acumulator + 1 : (board[current] === '_') ? acumulator : -1 , 0);
-}
+	var totalFreeAdyacentCount = function(board){
+		var adyacentsCountPerCell = [...Array(9).keys()].map((i) => getFreeAdyacentsCountPerCell(board, i));
+		var totalAdyacentCount = [...Array(9).keys()];
+		totalAdyacentCount = totalAdyacentCount.map((x) => adyacentsCountPerCell.filter((adyacentCount) => adyacentCount == x ? true : false).length );	
+		return totalAdyacentCount;
+	};
 
-var getLinesLengthCount = function(board,player){
-	var linesLenght = posibleLines.map( (line) => lineLength(board,player,line));
-	
-	var linesOfEachLenght = [-1,0,1,2,3];
-	linesOfEachLenght = linesOfEachLenght.map((x) => linesLenght.filter((lineLength) => lineLength == x).length );	
+	var lineLength = function(board,player,line){
+		return line.reduce( (acumulator,current) => (board[acumulator]==-1) ? -1 : (board[current]===player) ? acumulator = acumulator + 1 : (board[current] === '_') ? acumulator : -1 , 0);
+	};
 
-	return linesOfEachLenght;
-}
+	var getLinesLengthCount = function(board,player){
+		var linesLenght = posibleLines.map( (line) => lineLength(board,player,line));
+		
+		var linesOfEachLenght = [-1,0,1,2,3];
+		linesOfEachLenght = linesOfEachLenght.map((x) => linesLenght.filter((lineLength) => lineLength == x).length );	
 
-var getFeature = function(board,player){
-	return { 
-		totalFreeAdyacentCount : totalFreeAdyacentCount(board), //Array from 0 to 8 indicating how many cells have i free adyacents
-		linesLenghtcount : getLinesLengthCount(board,player) //Array from 0 to 4, indicating 0: lines bloqued, 1: lines with all cell free, 2: lines with 1 own, 3: lines with 2 own, 4: lines with 3 own
-	}
-}
+		return linesOfEachLenght;
+	};
 
-var posibleLinesWithCell = function(cellIndex){
-	return posibleLines.filter((line) => line.reduce((acumulator,current) =>  acumulator = acumulator || current===cellIndex, false) );
-}
+	var getFeature = function(board,player){
+		return { 
+			totalFreeAdyacentCount : totalFreeAdyacentCount(board), //Array from 0 to 8 indicating how many cells have i free adyacents
+			linesLenghtcount : getLinesLengthCount(board,player) //Array from 0 to 4, indicating 0: lines bloqued, 1: lines with all cell free, 2: lines with 1 own, 3: lines with 2 own, 4: lines with 3 own
+		};
+	};
 
-var concreteActionToAbstractAction = function(board, player, concreteAction){
-	var hipoteticalBoard = board.split('');
-	hipoteticalBoard[concreteAction] = player;
-	hipoteticalBoard = hipoteticalBoard.join('');
+	var posibleLinesWithCell = function(cellIndex){
+		return posibleLines.filter((line) => line.reduce((acumulator,current) =>  acumulator = acumulator || current===cellIndex, false) );
+	};
 
-	//La idea es que la action es como si fuera una feature, le digo "estabas asa? ahora quedate asi"
-	//El problema que tengo que verificar es que no se si esta funcion es biyectiva, no se cumple que siempre que tengo un estado asa, lo puedo llevar a un estado asi,
-	return {
-		totalFreeAdyacentCount : totalFreeAdyacentCount(hipoteticalBoard), 
-		linesLenghtcount : getLinesLengthCount(hipoteticalBoard,player) 
-	}
-}
+	var concreteActionToAbstractAction = function(board, player, concreteAction){
+		var hipoteticalBoard = board.split('');
+		hipoteticalBoard[concreteAction] = player;
+		hipoteticalBoard = hipoteticalBoard.join('');
 
-var getFreeCells = function(board){
-	board = board.split('');
-	return board.map((cell,i) => ({index:i, content: cell})).filter((cell) => cell.content==='_').map((cell) => cell.index)
-}
+		//La idea es que la action es como si fuera una feature, le digo "estabas asa? ahora quedate asi"
+		//El problema que tengo que verificar es que no se si esta funcion es biyectiva, no se cumple que siempre que tengo un estado asa, lo puedo llevar a un estado asi,
+		return {
+			totalFreeAdyacentCount : totalFreeAdyacentCount(hipoteticalBoard), 
+			linesLenghtcount : getLinesLengthCount(hipoteticalBoard,player) 
+		};
+	};
 
-var abstractActionToConcreteAction = function(board, player, abstractAction){
-	//Ahora es horrible, porque me estoy dando cuenta que tengo que ver todas mis concrete actions y ver cual es como mi abstractAction	
-	var hipoteticalAbstractActionsForFreeCells = getFreeCells(board).map((hipoteticalConcreteAction) => ({concrete: hipoteticalConcreteAction, abstract : concreteActionToAbstractAction(board,player,hipoteticalConcreteAction) }));
+	var getFreeCells = function(board){
+		board = board.split('');
+		return board.map((cell,i) => ({index:i, content: cell})).filter((cell) => cell.content==='_').map((cell) => cell.index);
+	};
 
-	hipoteticalAbstractActionsForFreeCells = hipoteticalAbstractActionsForFreeCells.filter((hipoteticalAbstractAction) => sameAbstractActions(hipoteticalAbstractAction.abstract,abstractAction));
-	console.log(hipoteticalAbstractActionsForFreeCells);
-	return hipoteticalAbstractActionsForFreeCells[0].concrete;
-}
+	var abstractActionToConcreteAction = function(board, player, abstractAction){
+		//Ahora es horrible, porque me estoy dando cuenta que tengo que ver todas mis concrete actions y ver cual es como mi abstractAction	
+		var hipoteticalAbstractActionsForFreeCells = getFreeCells(board).map((hipoteticalConcreteAction) => ({concrete: hipoteticalConcreteAction, abstract : concreteActionToAbstractAction(board,player,hipoteticalConcreteAction) }));
 
-var sameAbstractActions = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+		hipoteticalAbstractActionsForFreeCells = hipoteticalAbstractActionsForFreeCells.filter((hipoteticalAbstractAction) => sameAbstractActions(hipoteticalAbstractAction.abstract,abstractAction));
+		console.log(hipoteticalAbstractActionsForFreeCells);
+		return hipoteticalAbstractActionsForFreeCells[0].concrete;
+	};
 
-var playerConverter = (player) => player.substring(0,1);
+	var sameAbstractActions = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 
-var encodingTicTacToeAbstract = function(game,moves,ply){
-	//The game uses Xs and Os for players, we need them to match the simbols in the board
-	var player = playerConverter(ply);
-	var feature = getFeature(game.board,player);
+	var playerConverter = (player) => player.substring(0,1);
 
-	var abstractActions = game.players.map(function(p){
-		return moves[p].map((concreteAction) => concreteActionToAbstractAction(game.board,player,concreteAction))
-	})
+	var encodingTicTacToeAbstract = function(game,moves,ply){
+		//The game uses Xs and Os for players, we need them to match the simbols in the board
+		var player = playerConverter(ply);
+		var feature = getFeature(game.board,player);
 
-	return{
-		ply: ply,
-		features: feature.totalFreeAdyacentCount.concat(feature.linesLenghtcount),
-		actions: abstractActions
-	}
-}
+		var abstractActions = game.players.map(function(p){
+			return moves[p].map((concreteAction) => concreteActionToAbstractAction(game.board,player,concreteAction));
+		});
 
-var actionDecodingTicTacToeAbstract = abstractActionToConcreteAction;
+		return{
+			ply: ply,
+			features: feature.totalFreeAdyacentCount.concat(feature.linesLenghtcount),
+			actions: abstractActions
+		};
+	};
 
-//module.exports = encodingTicTacToeAbstract;
+	var actionDecodingTicTacToeAbstract = abstractActionToConcreteAction;
+
+	return null; //FIXME
+})();
 
 // See __prologue__.js
 	return exports;
