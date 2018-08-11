@@ -16,7 +16,8 @@ module.exports = function (grunt) {
 			'CaseBase', 'CBRPlayer',
 			'dbs/MemoryCaseBase', 'dbs/SQLiteCaseBase',
 			'utils',
-			'gamesEncodings/ticTacToeAbstract',
+			'encodings/ticTacToe_direct',
+			'encodings/ticTacToe_abstract',
 			'__epilogue__',
 			],
 		deps: [

@@ -20,5 +20,6 @@ function __init__(base, Sermat, ludorum) { "use strict";
 		__SERMAT__: { include: [base, ludorum] },
 
 		dbs: { /* Namespace for different types of case bases. */ },
-		utils: { /* Namespace for different utility functions and definitions. */ }
+		utils: { /* Namespace for different utility functions and definitions. */ },
+		encodings: { /* Namespace for different game encodings. */ }
 	};
