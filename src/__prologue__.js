@@ -13,12 +13,15 @@ function __init__(base, Sermat, ludorum) { "use strict";
 
 // Library layout. /////////////////////////////////////////////////////////////////////////////////
 	var exports = {
-		__package__: 'ludorum-player-cbr',
-		__name__: 'ludorum_player_cbr',
-		__init__: __init__,
-		__dependencies__: [base, Sermat, ludorum],
-		__SERMAT__: { include: [base, ludorum] },
+			__package__: 'ludorum-player-cbr',
+			__name__: 'ludorum_player_cbr',
+			__init__: __init__,
+			__dependencies__: [base, Sermat, ludorum],
+			__SERMAT__: { include: [base, ludorum] },
 
-		dbs: { /* Namespace for different types of case bases. */ },
-		utils: { /* Namespace for different utility functions and definitions. */ }
-	};
+			dbs: { /* Namespace for different types of case bases. */ },
+			games: { /* Namespace for functions and definitions for supporting games. */ }
+		},
+		dbs = exports.dbs,
+		games = exports.games
+	;
