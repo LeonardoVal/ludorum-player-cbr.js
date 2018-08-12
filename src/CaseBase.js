@@ -2,27 +2,14 @@
 
 A `CaseBase` holds all cases for a game.
 */
-var CaseBase = exports.CaseBase = base.declare({
+var CaseBase = exports.CaseBase = declare({
 	constructor: function CaseBase(params) {
 		this.game = params && params.game;
-		if (params && typeof params.encoding === 'function') {
-			this.encoding = params.encoding;
-		}
-		if (params && typeof params.distance === 'function') {
-			this.distance = params.distance;
+		if (params && typeof params.Case === 'function') {
+			this.Case = params.Case;
 		}
 		this.random = params && params.random || Randomness.DEFAULT;
 	},
-
-	/** The `encoding` of a case takes a `game` state and the `moves` performed and returns an 
-	objects with the following data:
-	
-	+ `features`: An array of integer values that identify with the game state,
-
-	+ `actions`: An array with one value per player, an integer identifying an action if the player
-	is active, or `null` if the player has not moved.
-	*/
-	encoding: unimplemented('CaseBase', 'encoding(game, moves, ply)'),
 
 	/** ## Distances ########################################################################### */
 
@@ -55,24 +42,19 @@ var CaseBase = exports.CaseBase = base.declare({
 			var result = match.result(),
 				history = match.history,
 				entry, _case, breakStoring;
-			cdb.game.players.forEach(function (p) {
-				result[p] = [
-					result[p] > 0 ? 1 : 0,
-					result[p] === 0 ? 1 : 0,
-					result[p] < 0 ? 1 : 0,
-				];
-			});
 			for (var i = history.length - 1; i >= 0; i--) {
 				entry = history[i];
 				if (entry.moves) {
-					_case = cdb.encoding(entry.state, entry.moves, i);
-					_case.result = result;
-					breakStoring = retainThreshold !== 0 &&
-						retainThreshold > cdb.closestDistance(entry.state);
-					cdb.addCase(_case);
-					if (breakStoring) {
-						break;
-					}
+					cdb.Case.fromGame(entry.state, i, entry.moves).forEach(function (_case) {
+						_case.addResult(result);
+						cdb.addCase(_case);
+					});
+					//FIXME
+					// breakStoring = retainThreshold !== 0 && retainThreshold > cdb.closestDistance(entry.state);
+					// cdb.addCase(_case);
+					// if (breakStoring) {
+					//	break;
+					// }
 				}
 			}
 			return match;
@@ -147,9 +129,12 @@ var CaseBase = exports.CaseBase = base.declare({
 	*/
 	nn: function nn(k, game) {
 		var cb = this,
-			gameCase = this.encoding(game),
+			cases = iterable(this.Case.fromGame(game)),
 			cs = iterable(this.cases()).map(function (_case) {
-				return [_case, cb.distance(_case.features, gameCase.features)];
+				var d = cases.map(function (c) {
+					return cb.distance(_case.features, c.features);
+				}).min();
+				return [_case, d];
 			}).sorted(function (c1, c2) {
 				return c1[1] - c2[1];
 			}).toArray();
@@ -176,7 +161,7 @@ var CaseBase = exports.CaseBase = base.declare({
 			knn = cb.nn(k, game);
 		iterable(knn).forEachApply(function (_case, distance) {
 			var m = r[JSON.stringify(_case.actions[roleIndex])],
-				result = _case.result[role],
+				result = _case.results[role],
 				ev, support, ratio;
 			if (m) {
 				support = _case.count / (10 + _case.count);
@@ -203,7 +188,7 @@ var CaseBase = exports.CaseBase = base.declare({
 			}).toObject(),
 			knn = cb.nn(k, game, role);
 		return iterable(knn).map(function (_case, distance) {
-			return (_case.result[role][0] - _case.result[role][2]) / (1 + distance);
+			return (_case.results[role][0] - _case.results[role][2]) / (1 + distance);
 		}).sum();
 	},
 
