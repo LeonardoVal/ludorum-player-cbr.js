@@ -21,42 +21,156 @@ function __init__(base, Sermat, ludorum) { "use strict";
 
 // Library layout. /////////////////////////////////////////////////////////////////////////////////
 	var exports = {
-		__package__: 'ludorum-player-cbr',
-		__name__: 'ludorum_player_cbr',
-		__init__: __init__,
-		__dependencies__: [base, Sermat, ludorum],
-		__SERMAT__: { include: [base, ludorum] },
+			__package__: 'ludorum-player-cbr',
+			__name__: 'ludorum_player_cbr',
+			__init__: __init__,
+			__dependencies__: [base, Sermat, ludorum],
+			__SERMAT__: { include: [base, ludorum] },
 
-		dbs: { /* Namespace for different types of case bases. */ },
-		utils: { /* Namespace for different utility functions and definitions. */ }
-	};
+			dbs: { /* Namespace for different types of case bases. */ },
+			games: { /* Namespace for functions and definitions for supporting games. */ }
+		},
+		dbs = exports.dbs,
+		games = exports.games
+	;
 
+
+/** # Case
+
+TODO
+*/
+var Case = exports.Case = declare({
+	/** The `props` argument must have:
+	
+	+ `count`: the amount of times this case has been seen,
+	+ `ply`: a number with the average ply where this case happens,
+	+ `features`: an array of numbers representing the relevant information of the case,
+	+ `actions`: an object mapping players to actions,
+	+ `results`: an object mapping players to a 3 number array with the counts for: victories, 
+	draws and defeats.
+	*/
+	constructor: function Case(props) {
+		this.count = +props.count || 1;
+		this.ply = +props.ply;
+		this.features = props.features;
+		this.actions = props.actions;
+		this.results = props.results;
+	},
+
+	/** TODO 
+	*/
+	'static fromGame': base.objects.unimplemented('Case', 'fromGame(game, ply, moves)'),
+
+	/** TODO 
+	*/
+	addResult: function addResult(result) {
+		var r;
+		for (var p in result) {
+			r = result[p];
+			if (Array.isArray(r) && r.length === 3) { // case results
+				this.results[p][0] += result[p][0];
+				this.results[p][1] += result[p][1];
+				this.results[p][2] += result[p][2];
+			} else if (typeof r === 'number') {
+				this.results[p][r > 0 ? 0 : r === 0 ? 1 : 2]++;
+			} else {
+				raise('Invalid result (', r, ')!');
+			}
+		}
+		this.count = (this.count || 0) + 1; 
+	},
+
+	/** TODO 
+	*/
+	merge: function merge(_case) {
+		this.ply = (this.ply * this.count + _case.ply * _case.count) / (this.count + _case.count);
+		this.count += _case.count;
+		this.addResult(_case.result);
+	},
+
+	/** TODO
+	*/
+	identifier: function identifier() {
+		return this.features.join(',') + JSON.stringify(this.actions);
+	},
+
+	/** Return a database record for this case.
+	*/
+	record: function record(obj) {
+		obj = obj || {};
+		var p;
+		obj.id = this.identifier();
+		obj.ply = this.ply;
+		obj.count = this.count;
+		this.features.forEach(function (f, i) {
+			obj['f'+ i] = f;
+		});
+		for (p in this.actions) {
+			obj['a_'+ p] = JSON.stringify(this.actions[p]);
+		}
+		for (p in this.results) {
+			obj['won_'+ p] = this.results[p][0];
+			obj['tied_'+ p] = this.results[p][1];
+			obj['lost_'+ p] = this.results[p][2];
+		}
+		return obj;
+	},
+
+	/** TODO
+	*/
+	'static fromRecord': function fromRecord(record) {
+		var features = [],
+			actions = {},
+			results = {};
+		for (var k in record) {
+			if (k[0] === 'f') {
+				features[+k.substr(1)] = record[k];
+			} else if (k.substr(0, 2) === 'a_') {
+				actions[k.substr(2)] = JSON.parse(record[k]);
+			}
+		}
+		for (var p in results) {
+			results[p] = [record['won_'+ p], record['tied_'+ p], record['lost_'+ p]];
+		}
+		return new this({ 
+			count: record.count,
+			ply: record.ply,
+			features: features,
+			actions: actions,
+			results: results
+		});
+	},
+
+	// Utilities //////////////////////////////////////////////////////////////////////////////////
+
+	/** Serialization and materialization using Sermat.
+	*/
+	'static __SERMAT__': {
+		identifier: 'Case',
+		serializer: function serialize_Case(obj) {
+			return [{
+				count: obj.count,
+				ply: obj.ply,
+				features: obj.features,
+				actions: obj.actions,
+				results: obj.results
+			}];
+		}
+	}
+}); // declare Case
 
 /** # CaseBase 
 
 A `CaseBase` holds all cases for a game.
 */
-var CaseBase = exports.CaseBase = base.declare({
+var CaseBase = exports.CaseBase = declare({
 	constructor: function CaseBase(params) {
 		this.game = params && params.game;
-		if (params && typeof params.encoding === 'function') {
-			this.encoding = params.encoding;
-		}
-		if (params && typeof params.distance === 'function') {
-			this.distance = params.distance;
+		if (params && typeof params.Case === 'function') {
+			this.Case = params.Case;
 		}
 		this.random = params && params.random || Randomness.DEFAULT;
 	},
-
-	/** The `encoding` of a case takes a `game` state and the `moves` performed and returns an 
-	objects with the following data:
-	
-	+ `features`: An array of integer values that identify with the game state,
-
-	+ `actions`: An array with one value per player, an integer identifying an action if the player
-	is active, or `null` if the player has not moved.
-	*/
-	encoding: unimplemented('CaseBase', 'encoding(game, moves, ply)'),
 
 	/** ## Distances ########################################################################### */
 
@@ -89,24 +203,19 @@ var CaseBase = exports.CaseBase = base.declare({
 			var result = match.result(),
 				history = match.history,
 				entry, _case, breakStoring;
-			cdb.game.players.forEach(function (p) {
-				result[p] = [
-					result[p] > 0 ? 1 : 0,
-					result[p] === 0 ? 1 : 0,
-					result[p] < 0 ? 1 : 0,
-				];
-			});
 			for (var i = history.length - 1; i >= 0; i--) {
 				entry = history[i];
 				if (entry.moves) {
-					_case = cdb.encoding(entry.state, entry.moves, i);
-					_case.result = result;
-					breakStoring = retainThreshold !== 0 &&
-						retainThreshold > cdb.closestDistance(entry.state);
-					cdb.addCase(_case);
-					if (breakStoring) {
-						break;
-					}
+					cdb.Case.fromGame(entry.state, i, entry.moves).forEach(function (_case) {
+						_case.addResult(result);
+						cdb.addCase(_case);
+					});
+					//FIXME
+					// breakStoring = retainThreshold !== 0 && retainThreshold > cdb.closestDistance(entry.state);
+					// cdb.addCase(_case);
+					// if (breakStoring) {
+					//	break;
+					// }
 				}
 			}
 			return match;
@@ -181,9 +290,12 @@ var CaseBase = exports.CaseBase = base.declare({
 	*/
 	nn: function nn(k, game) {
 		var cb = this,
-			gameCase = this.encoding(game),
+			cases = iterable(this.Case.fromGame(game)),
 			cs = iterable(this.cases()).map(function (_case) {
-				return [_case, cb.distance(_case.features, gameCase.features)];
+				var d = cases.map(function (c) {
+					return cb.distance(_case.features, c.features);
+				}).min();
+				return [_case, d];
 			}).sorted(function (c1, c2) {
 				return c1[1] - c2[1];
 			}).toArray();
@@ -210,7 +322,7 @@ var CaseBase = exports.CaseBase = base.declare({
 			knn = cb.nn(k, game);
 		iterable(knn).forEachApply(function (_case, distance) {
 			var m = r[JSON.stringify(_case.actions[roleIndex])],
-				result = _case.result[role],
+				result = _case.results[role],
 				ev, support, ratio;
 			if (m) {
 				support = _case.count / (10 + _case.count);
@@ -237,7 +349,7 @@ var CaseBase = exports.CaseBase = base.declare({
 			}).toObject(),
 			knn = cb.nn(k, game, role);
 		return iterable(knn).map(function (_case, distance) {
-			return (_case.result[role][0] - _case.result[role][2]) / (1 + distance);
+			return (_case.results[role][0] - _case.results[role][2]) / (1 + distance);
 		}).sum();
 	},
 
@@ -376,7 +488,7 @@ var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
 
 A memory implementation of a `CaseBase`.
 */
-var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
+var MemoryCaseBase = dbs.MemoryCaseBase = declare(CaseBase, {
 	constructor: function MemoryCaseBase(params) {
 		CaseBase.call(this, params);
 		this.__cases__ = [];
@@ -388,15 +500,14 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	},
 	
 	addCase: function addCase(_case) {
-		//TODO Check `_case` properties.
-		var entry = {
-			count: _case.count || 0,
-			ply: _case.ply,
-			features: Sermat.clone(_case.features || null),
-			actions: Sermat.clone(_case.actions || null),
-			result: Sermat.clone(_case.result || null)
-		};
-		return this.__cases__.push(entry);
+		var id = _case.identifier();
+		if (this.__index__[id]) {
+			var storedCase = this.__cases__[this.__index__[id]];
+			storedCase.merge(_case);
+		} else {
+			var i = this.__cases__.push(_case) - 1;
+			this.__index__[id] = i;
+		}
 	},
 
 	/** ## Utilities ########################################################################### */
@@ -404,7 +515,7 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	'static __SERMAT__': {
 		identifier: 'MemoryCaseBase',
 		serializer: function serialize_MemoryCaseBase(obj) {
-			return CaseBase.__SERMAT__.serialize_CaseBase(obj);
+			return null; //FIXME
 		}
 	},
 }); // declare MemoryCaseBase
@@ -413,7 +524,7 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 
 An implementation of a `CaseBase` using SQLite3 through `better-sqlite3`.
 */
-exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
+dbs.SQLiteCaseBase = declare(CaseBase, {
 	/** 
 	*/
 	constructor: function SQLiteCaseBase(params) {
@@ -439,38 +550,25 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		}
 		
 		this.__tableName__ = params.tableName || 'CB_'+ game.name;
-		var encoding = this.encoding(game, game.moves());
-		this.__featureColumns__ = encoding.features.map(function (_, i) {
-			return 'f'+ i;
-		});
-		this.__actionColumns__ = game.players.map(function (_, i) {
-			return 'a'+ i;
-		});
-		this.__resultColumns__ = base.Iterable.range(game.players.length)
-			.product(['won', 'tied', 'lost'])
-			.mapApply(function (p, rt) { // result columns
-				return rt + p;
-			}).toArray();
 		this.__createTable__();
-		this.__db__.register({ name: 'distance', deterministic: true, varargs: true },
-			this.__distanceFunction__(this.distance));
 	},
 
-	__createTable__: function __createTable__(tableName, featureColumns, actionColumns, resultColumns) {
+	__createTable__: function __createTable__(tableName, game) {
 		tableName = tableName || this.__tableName__;
-		featureColumns = featureColumns || this.__featureColumns__;
-		actionColumns = actionColumns || this.__actionColumns__;
-		resultColumns = resultColumns || this.__resultColumns__;
-
+		game = game || this.game;
+		var _case = this.Case.fromGame(game)[0],
+			actionColumns = game.players.map(function (p) {
+				return 'a_'+ p +' TEXT';
+			}).join(', '),
+			resultColumns = game.players.map(function (p) {
+				return 'won_'+ p +' INTEGER, tied_'+ p +' INTEGER, lost_'+ p +' INTEGER';
+			}).join(', '),
+			featureColumns = _case.features.map(function (_, i) {
+				return 'f'+ i +' INTEGER';
+			}).join(', ');
 		return this.__runSQL__('CREATE TABLE IF NOT EXISTS '+ tableName +
-			'(key TEXT PRIMARY KEY, count INTEGER, ply REAL, '+
-			actionColumns.map(function (colName) {
-				return colName +' TEXT';
-			}).join(', ') +', '+
-			resultColumns.concat(featureColumns).map(function (colName) {
-				return colName +' INTEGER';
-			}).join(', ') +
-		')');
+			'(id TEXT PRIMARY KEY, count INTEGER, ply REAL, '+
+			actionColumns +', '+ resultColumns +', '+ featureColumns +')');
 	},
 
 	__runSQL__: function __runSQL__(sql) {
@@ -493,101 +591,50 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		}
 	},
 
-	/** The distance function of the case base is used in many SQL statements sent to the database.
-	Since SQLite functions cannot handle arrays, a variadic form that takes both feature arrays in
-	a chain is built.
-	*/
-	__distanceFunction__: function __distanceFunction__(df) {
-		df = df || this.distance;
-		var features1 = [], 
-			features2 = [];
-		return function () {
-			var middle = (arguments.length / 2) |0;
-			for (var i = 0; i < middle; i++) {
-				features1.push(arguments[i]);
-				features2.push(arguments[middle + i]);
-			}
-			return df(features1, features2);
-		};
-	}, 
-
 	/** ## Cases ############################################################################### */
-
-	/** The cases table's primary key is a string that identifies the case. By default, the 
-	concatenation of feature values and actions values is used.
-	*/
-	__key__: function __key__(_case) {
-		var features = _case.features,
-			actions = _case.actions || this.game.players.map(function () {
-				return null;
-			});
-		return features.join(',') +':'+ actions.join(',');
-	},
 
 	addCase: function addCase(_case) {
 		var players = this.game.players,
-			caseKey = this.__key__(_case),
-			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' VALUES ('+ 
-				Iterable.repeat('?', 3 + this.__actionColumns__.length + 
-					this.__resultColumns__.length + this.__featureColumns__.length).join(',') +')',
-			isNew = this.__runSQL__(sql, [caseKey, 1, _case.ply]
-				.concat(_case.actions.map(function (action) {
-					return action === null ? null : JSON.stringify(action);
-				}))
-				.concat(Iterable.chain.apply(Iterable, players.map(function (p) {
-					return _case.result[p];
-				})).toArray())
-				.concat(_case.features)
-			).changes > 0;
+			record = _case.record(),
+			fields = Object.keys(record),
+			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' ('+ fields.join(',') +
+				') VALUES ('+ Iterable.repeat('?', fields.length).join(',') +')',
+			isNew = this.__runSQL__(sql, fields.map(function (f) {
+					return record[f];
+				})).changes > 0;
 		if (!isNew) { // Insert was ignored because the case is already stored.
 			this.__runSQL__('UPDATE '+ this.__tableName__ +' '+
 				'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
 				players.map(function (p) {
-					var r = _case.result[p],
-						pi = players.indexOf(p),
+					var r = _case.results[p],
 						sets = [];
 					if (r[0]) {
-						sets.push('won'+ pi +' = won'+ pi +' + '+ r[0]);
+						sets.push('won_'+ p +' = won_'+ p +' + '+ r[0]);
 					}
 					if (r[1]) {
-						sets.push('tied'+ pi +' = tied'+ pi +' + '+ r[1]);
+						sets.push('tied_'+ p +' = tied_'+ p +' + '+ r[1]);
 					}
 					if (r[2]) {
-						sets.push('lost'+ pi +' = lost'+ pi +' + '+ r[2]);
+						sets.push('lost_'+ p +' = lost_'+ p +' + '+ r[2]);
 					}
 					return sets.join(', ');
-				}).join(', ') +' WHERE key = \''+ caseKey +'\''
+				}).join(', ') +' WHERE id = \''+ record.id +'\''
 			);
 		}
 	},
 
-	__row2case__: function __row2case__(row) {
-		return {
-			count: row.count,
-			ply: row.ply,
-			features: this.__featureColumns__.map(function (col) {
-				return row[col];
-			}),
-			actions: this.__actionColumns__.map(function (col) {
-				return JSON.parse(row[col]);
-			}),
-			result: iterable(this.game.players).map(function (player, i) {
-				return [player, [row['won'+ i], row['tied'+ i], row['lost'+ i]]];
-			}).toObject()
-		};
-	},
-
-	cases: function cases(filters) {
-		return this.__getSQL__('SELECT * FROM '+ this.__tableName__) //TODO Filters
-			.map(this.__row2case__.bind(this));
+	cases: function cases() {
+		return this.__getSQL__('SELECT * FROM '+ this.__tableName__)
+			.map(this.Case.fromRecord.bind(this.Case));
 	},
 
 	__nn_sql__: function __nn_sql__(k, game) {
-		var gameCase = this.encoding(game);
-		return 'SELECT *, ('+ 
-			Iterable.zip(this.__featureColumns__, gameCase.features).mapApply(function (v1, v2) {
-				return v2 !== null && !isNaN(v2) ? 'abs(ifnull('+ v1 +'-('+ v2 +'),0))' : '0';
-			}).join('+') +') AS distance '+
+		var cases = this.Case.fromGame(game);
+		return 'SELECT *, min('+ cases.map(function (_case) {
+				return _case.features.map(function (v, i) {
+					return v !== null && !isNaN(v) ? 'abs(ifnull(f'+ i +'-('+ v +'),0))' : '0';
+				}).join('+');
+			}).join(', ') +') AS distance '+
 			'FROM '+ this.__tableName__ +' '+
 			'ORDER BY distance ASC LIMIT '+ k;
 	},
@@ -596,7 +643,7 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 		var cb = this,
 			sql = this.__nn_sql__(k, game);
 		return this.__db__.prepare(sql).all().map(function (row) {
-			return [cb.__row2case__(row), row.distance];
+			return [cb.Case.fromRecord(row), row.distance];
 		});
 	},
 
@@ -612,30 +659,39 @@ exports.dbs.SQLiteCaseBase = base.declare(CaseBase, {
 
 
 
+/**
+ 
+*/
+games.TicTacToe = {
+	DirectCase: declare(Case, {
+		/**
+		 
+		*/
+		'static fromGame': function fromGame(game, ply, moves) {
+			var features = game.board.split('').map(function (chr) {
+					return chr === 'X' ? (+1) : chr === 'O' ? (-1) : 0; 
+				}),
+				actions = iterable(game.players).map(function (p) {
+					return [p, moves && moves.hasOwnProperty(p) ? moves[p] : null];
+				}).toObject(),
+				results = iterable(game.players).map(function (p) {
+					return [p, [0, 0, 0]];
+				}).toObject(),
+				_case = new this({
+					ply: +ply,
+					features: features,
+					actions: actions,
+					results: results
+				});
+			return [_case];
+		}
+
+	})
+}; // declare TicTacToe.DirectCase
+
 /** # Utilities
 
 */
-
-/** This library provides some `encodings` for simple games in Ludorum for testing purposes.
-*/
-exports.utils.encodings = {
-	/** The `TicTacToe` encoding has 9 features, one per square in the board. Each feature has the
-	value of 0 if it is marked with an X, 1 if it is marked with an O, or 0.5 otherwise.
-
-	TicTacToe's actions are numbers, hence no transformation or encoding is required.
-	*/
-	TicTacToe: function encodingTicTacToe(game, moves, ply) {
-		return {
-			ply: ply,
-			features: game.board.split('').map(function (chr) {
-				return chr === 'X' ? (+1) : chr === 'O' ? (-1) : 0; 
-			}),
-			actions: !moves ? null : game.players.map(function (p) {
-				return moves.hasOwnProperty(p) ? moves[p] : null;
-			})
-		};
-	}
-};
 
 // See __prologue__.js
 	return exports;
