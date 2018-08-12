@@ -2,7 +2,7 @@
 
 A memory implementation of a `CaseBase`.
 */
-var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
+var MemoryCaseBase = dbs.MemoryCaseBase = declare(CaseBase, {
 	constructor: function MemoryCaseBase(params) {
 		CaseBase.call(this, params);
 		this.__cases__ = [];
@@ -14,15 +14,14 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	},
 	
 	addCase: function addCase(_case) {
-		//TODO Check `_case` properties.
-		var entry = {
-			count: _case.count || 0,
-			ply: _case.ply,
-			features: Sermat.clone(_case.features || null),
-			actions: Sermat.clone(_case.actions || null),
-			result: Sermat.clone(_case.result || null)
-		};
-		return this.__cases__.push(entry);
+		var id = _case.identifier();
+		if (this.__index__[id]) {
+			var storedCase = this.__cases__[this.__index__[id]];
+			storedCase.merge(_case);
+		} else {
+			var i = this.__cases__.push(_case) - 1;
+			this.__index__[id] = i;
+		}
 	},
 
 	/** ## Utilities ########################################################################### */
@@ -30,7 +29,7 @@ var MemoryCaseBase = exports.dbs.MemoryCaseBase = declare(CaseBase, {
 	'static __SERMAT__': {
 		identifier: 'MemoryCaseBase',
 		serializer: function serialize_MemoryCaseBase(obj) {
-			return CaseBase.__SERMAT__.serialize_CaseBase(obj);
+			return null; //FIXME
 		}
 	},
 }); // declare MemoryCaseBase
