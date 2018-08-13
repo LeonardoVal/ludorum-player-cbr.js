@@ -106,6 +106,18 @@ var Case = exports.Case = declare({
 
 	// Utilities //////////////////////////////////////////////////////////////////////////////////
 
+	'static emptyResults': function emptyResults(players) {
+		return iterable(players).map(function (p) {
+			return [p, [0, 0, 0]];
+		}).toObject();
+	},
+
+	'static actionsFromMoves': function getActions(players, moves) {
+		return iterable(players).map(function (p) {
+			return [p, moves && moves.hasOwnProperty(p) ? moves[p] : null];
+		}).toObject();
+	},
+
 	/** Serialization and materialization using Sermat.
 	*/
 	'static __SERMAT__': {
