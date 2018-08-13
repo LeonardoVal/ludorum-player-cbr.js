@@ -22,14 +22,5 @@ var MemoryCaseBase = dbs.MemoryCaseBase = declare(CaseBase, {
 			var i = this.__cases__.push(_case) - 1;
 			this.__index__[id] = i;
 		}
-	},
-
-	/** ## Utilities ########################################################################### */
-
-	'static __SERMAT__': {
-		identifier: 'MemoryCaseBase',
-		serializer: function serialize_MemoryCaseBase(obj) {
-			return null; //FIXME
-		}
-	},
+	}
 }); // declare MemoryCaseBase

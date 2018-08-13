@@ -123,15 +123,6 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 		return this.__db__.prepare(sql).all().map(function (row) {
 			return [cb.Case.fromRecord(row), row.distance];
 		});
-	},
-
-	// Utilities //////////////////////////////////////////////////////////////////////////////////
-
-	'static __SERMAT__': {
-		identifier: 'SQLiteCaseBase',
-		serializer: function serialize_SQLiteCaseBase(obj) {
-			return CaseBase.__SERMAT__.serialize_CaseBase(obj);
-		}
-	},
+	}
 }); // declare SQLiteCaseBase
 
