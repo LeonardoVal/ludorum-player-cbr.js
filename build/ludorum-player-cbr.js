@@ -707,7 +707,7 @@ games.TicTacToe = (function () {
 
 		/**
 		*/
-		EquivalenciesCase: declare(Case, {
+		EquivalenceCase: declare(Case, {
 			'static fromGame': function fromGame(game, ply, moves) {
 				var board = game.board.split(''),
 					activePlayer = game.activePlayer();
