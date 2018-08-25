@@ -20,11 +20,12 @@ var Case = exports.Case = declare({
 		this.results = props.results;
 	},
 
-	/** TODO 
+	/** The static method `fromGame` creates a case from a game state, ply number and moves
+	performed.
 	*/
 	'static fromGame': base.objects.unimplemented('Case', 'fromGame(game, ply, moves)'),
 
-	/** TODO 
+	/** Adding a result to a case updates the `results` property to acount for the given `result`. 
 	*/
 	addResult: function addResult(result) {
 		var r;
@@ -43,7 +44,7 @@ var Case = exports.Case = declare({
 		this.count = (this.count || 0) + 1; 
 	},
 
-	/** TODO 
+	/** Merging `this` case with another case updates the properties `ply`, `count` and `results`.
 	*/
 	merge: function merge(_case) {
 		this.ply = (this.ply * this.count + _case.ply * _case.count) / (this.count + _case.count);
@@ -51,7 +52,16 @@ var Case = exports.Case = declare({
 		this.addResult(_case.result);
 	},
 
-	/** TODO
+	/** Cases' features and actions can result from transformations and apply to several different
+	game states. The `getMove` method allows a case to adapt its action to a given game state. 
+	*/
+	getMove: function getMove(game, role) {
+		return this.actions[role];
+	},
+
+	// ## Databases ################################################################################
+
+	/** An `identifier` for a case is a string that can be used as a primary key of a case base.
 	*/
 	identifier: function identifier() {
 		return this.features.join(',') + JSON.stringify(this.actions);
@@ -79,7 +89,7 @@ var Case = exports.Case = declare({
 		return obj;
 	},
 
-	/** TODO
+	/** The static method `fromRecord` creates a case from a database record.
 	*/
 	'static fromRecord': function fromRecord(record) {
 		var features = [],
@@ -104,14 +114,18 @@ var Case = exports.Case = declare({
 		});
 	},
 
-	// Utilities //////////////////////////////////////////////////////////////////////////////////
+	// ## Utilities ################################################################################
 
+	/** `emptyResults` creates an object that maps every player to an array with 3 zeros.
+	*/
 	'static emptyResults': function emptyResults(players) {
 		return iterable(players).map(function (p) {
 			return [p, [0, 0, 0]];
 		}).toObject();
 	},
 
+	/** This method adds null actions to a copy of the `moves` object.
+	*/
 	'static actionsFromMoves': function getActions(players, moves) {
 		return iterable(players).map(function (p) {
 			return [p, moves && moves.hasOwnProperty(p) ? moves[p] : null];
