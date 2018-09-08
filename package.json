@@ -36,7 +36,8 @@
 		"better-sqlite3": "~4.1.4",
 		"@creatartis/ludorum-game-mancala": "~0.1.1",
 		"@creatartis/ludorum-game-connect4": "~0.1.1",
-		"@creatartis/ludorum-game-reversi": "~0.1.0"
+		"@creatartis/ludorum-game-reversi": "~0.1.0",
+		"@creatartis/ludorum-risky": "~0.0.1"
 	},
 	"scripts": {
 		"test": "grunt"
