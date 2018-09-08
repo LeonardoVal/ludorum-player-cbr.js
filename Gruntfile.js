@@ -6,16 +6,18 @@ module.exports = function (grunt) {
 	});
 
 	require('creatartis-grunt').config(grunt, {
-		sourceNames: ['__prologue__', 
+		sourceNames: ['__prologue__',
 			'Case', 'CaseBase', 'CBRPlayer',
 			'dbs/MemoryCaseBase', 'dbs/SQLiteCaseBase',
-			'games/tictactoe',
+			'games/tictactoe', 'games/risk',
 			'utils',
 			'__epilogue__'],
 		deps: [
 			{ id: 'creatartis-base', name: 'base' },
-			{ id: 'sermat', name: 'Sermat',
-				path: 'node_modules/sermat/build/sermat-umd.js' },
+			{
+				id: 'sermat', name: 'Sermat',
+				path: 'node_modules/sermat/build/sermat-umd.js'
+			},
 			{ id: 'ludorum' }
 		],
 		targets: {
