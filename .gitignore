@@ -5,3 +5,4 @@ npm-debug.log
 **/*.sqlite
 **/*.sqlite-journal
 tests/logs/*.log
+debug.log
