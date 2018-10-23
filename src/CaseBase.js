@@ -7,6 +7,24 @@ var CaseBase = exports.CaseBase = declare({
 		this.random = params && params.random || Randomness.DEFAULT;
 	},
 
+	/** ## Abstract methods ##################################################################### */
+
+	/** Depending on its implementation, a case base may require information about the game and the
+	player that uses it in order to work. 
+	*/
+	init: unimplemented('CaseBase', 'init(game, player)'),
+
+	/** Adding a case to the database is not implemented by default.
+	*/
+	addCase: unimplemented('CaseBase', 'addCase(_case)'),
+
+	/** The `cases` method returns the sequence of all cases in the database. Case order is not
+	defined.
+	*/
+	cases: unimplemented('CaseBase', 'cases(filters)'),
+
+	/** ## Case retrieval ####################################################################### */
+
 	/** The default `distance` is a form of Manhattan distance, which does not count `null` or `NaN`
 	features.
 	*/
@@ -19,15 +37,6 @@ var CaseBase = exports.CaseBase = declare({
 			}
 		}).sum();
 	},
-
-	/** Adding a case to the database is not implemented by default.
-	*/
-	addCase: unimplemented('CaseBase', 'addCase(_case)'),
-
-	/** The `cases` method returns the sequence of all cases in the database. Case order is not
-	defined.
-	*/
-	cases: unimplemented('CaseBase', 'cases(filters)'),
 
 	/** The `nn` method returns the `k` neareast neighbours of the given cases. 
 	*/

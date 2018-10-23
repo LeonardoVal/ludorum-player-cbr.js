@@ -12,6 +12,10 @@ var MemoryCaseBase = dbs.MemoryCaseBase = declare(CaseBase, {
 		}
 	},
 
+	init: function init(game, player) {
+		// No initialization required.
+	},
+
 	cases: function cases() {
 		return base.iterable(this.__cases__);
 	},
