@@ -6,8 +6,9 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 	*/
 	constructor: function CaseBasedPlayer(params) {
 		ludorum.Player.call(this, params);
-		this.caseBase = params && params.caseBase || new MemoryCaseBase();
 		this.k = params && params.k || 20;
+		this.caseBase = params && params.caseBase || new MemoryCaseBase();
+		this.caseBase.init(this.game, this);
 	},
 
 	/** The method `casesFromGame` takes a `game` state and returns a case. This object includes
@@ -118,7 +119,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 	/** `actionEvaluations` assigns a number to every action available to the given `role` at the
 	given `game` state. It uses the case base to retrieve the _k_ most similar cases. 
 	*/
-	actionEvaluations: function actionEvaluations(game, role, options) {
+	actionEvaluations: function actionEvaluations(game, role, options) { //FIXME
 		var k = options && +options.k || this.k,
 			r = base.iterable(game.moves()[role]).map(function (move) {
 				return [JSON.stringify(move), [move, 0]];
@@ -226,7 +227,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 
 	// Utilities. /////////////////////////////////////////////////////////////////////////////////
 
-	assess: function assess(players, options) {
+	assess: function assess(players, options) { //FIXME
 		if (!Array.isArray(players)) {
 			players = [players];
 		}

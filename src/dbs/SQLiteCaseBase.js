@@ -10,38 +10,32 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 		this.__setupDatabase__(params);
 	},
 
-	/** ## Database setup and management ####################################################### */
+	/** ## Database setup and management ######################################################## */
 
 	/**
 	*/
 	__setupDatabase__: function __setupDatabase__(params) {
-		var game = this.game,
-			Database = this.Database || require('better-sqlite3');
+		var Database = this.Database || require('better-sqlite3');
 		if (params.db instanceof Database) {
 			this.__db__ = params.db;
 		} else {
-			this.__db__ = new Database(typeof params.db === 'string' ? params.db : 
-				'./'+ game.name.toLowerCase() +'-cbr.sqlite');
+			var dbName = typeof params.db === 'string' ? params.db : './cbr-test.sqlite';
+			this.__db__ = new Database(dbName);
 			this.__db__.pragma('journal_mode = OFF'); // Disable transactions.
 			this.__db__.pragma('cache_size = -128000'); // Increase default cache size.
 			this.__db__.pragma('encoding = "UTF-8"'); // Increase default cache size.
 		}
-		
-		this.__tableName__ = params.tableName || 'CB_'+ game.name;
-		this.__createTable__();
+		this.__tableName__ = params.tableName;
 	},
 
-	__createTable__: function __createTable__(tableName, game) {
-		tableName = tableName || this.__tableName__;
-		game = game || this.game;
-		var _case = this.Case.fromGame(game)[0],
-			actionColumns = game.players.map(function (p) {
+	__createTable__: function __createTable__(tableName, reference) {
+		var actionColumns = Object.keys(reference.actions).map(function (p) {
 				return 'a_'+ p +' TEXT';
 			}).join(', '),
-			resultColumns = game.players.map(function (p) {
+			resultColumns = Object.keys(reference.results).map(function (p) {
 				return 'won_'+ p +' INTEGER, tied_'+ p +' INTEGER, lost_'+ p +' INTEGER';
 			}).join(', '),
-			featureColumns = _case.features.map(function (_, i) {
+			featureColumns = reference.features.map(function (_, i) {
 				return 'f'+ i +' INTEGER';
 			}).join(', ');
 		return this.__runSQL__('CREATE TABLE IF NOT EXISTS '+ tableName +
@@ -71,9 +65,14 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 
 	/** ## Cases ############################################################################### */
 
+	init: function init(game, player) {
+		this.__tableName__ = this.__tableName__ || 'CB_'+ game.name;
+		var reference = player.casesFromGame(game, 0, game.moves())[0];
+		this.__createTable__(this.__tableName__, reference);
+	},
+	
 	addCase: function addCase(_case) {
-		var players = this.game.players,
-			record = _case.record(),
+		var record = _case.record(),
 			fields = Object.keys(record),
 			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' ('+ fields.join(',') +
 				') VALUES ('+ Iterable.repeat('?', fields.length).join(',') +')',
@@ -83,19 +82,10 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 		if (!isNew) { // Insert was ignored because the case is already stored.
 			this.__runSQL__('UPDATE '+ this.__tableName__ +' '+
 				'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
-				players.map(function (p) {
-					var r = _case.results[p],
-						sets = [];
-					if (r[0]) {
-						sets.push('won_'+ p +' = won_'+ p +' + '+ r[0]);
-					}
-					if (r[1]) {
-						sets.push('tied_'+ p +' = tied_'+ p +' + '+ r[1]);
-					}
-					if (r[2]) {
-						sets.push('lost_'+ p +' = lost_'+ p +' + '+ r[2]);
-					}
-					return sets.join(', ');
+				Object.keys(record).filter(function (k) {
+					return /^(won_|tied_|lost_)/.test(k);
+				}).map(function (k) {
+					return k +' = '+ k +' + '+ record[k];
 				}).join(', ') +' WHERE id = \''+ record.id +'\''
 			);
 		}
@@ -103,9 +93,10 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 
 	cases: function cases() {
 		return this.__getSQL__('SELECT * FROM '+ this.__tableName__)
-			.map(this.Case.fromRecord.bind(this.Case));
+			.map(Case.fromRecord.bind(Case));
 	},
 
+	/*FIXME
 	__nn_sql__: function __nn_sql__(k, game) {
 		var cases = this.Case.fromGame(game);
 		return 'SELECT *, min('+ cases.map(function (_case) {
@@ -124,5 +115,6 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 			return [cb.Case.fromRecord(row), row.distance];
 		});
 	}
+	*/
 }); // declare SQLiteCaseBase
 
