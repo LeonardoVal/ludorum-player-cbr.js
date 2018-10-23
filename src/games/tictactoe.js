@@ -50,6 +50,7 @@ games.TicTacToe = (function () {
 					return board.charAt(i);
 				}).join('');
 			});
+		maps = Array.from(new Set(maps)); // Remove duplicates.
 		maps.sort();
 		return maps;
 	};
