@@ -2,14 +2,14 @@
 */
 define(['creatartis-base', 'ludorum', 'ludorum-player-cbr'], function (base, ludorum, ludorumCBR) {
 
-	describe("TicTacToe's", function () { /////////////////////////////////
-		/*
-		*/
-		var game = new ludorum.games.TicTacToe();
+	describe("TicTacToe's implementations", function () { /////////////////////////////////
+		
+		it("DirectCBPlayer features", function () {
+			var cbrPlayer = new ludorumCBR.games.TicTacToe.DirectCBPlayer(),
+				game = cbrPlayer.game;
 
-		it("directFeatures function", function () {
 			function testGameEncoding(game, expectedFeatures) {
-				var features = ludorumCBR.games.TicTacToe.directFeatures(game);
+				var features = cbrPlayer.features(game);
 				expect(features.join('|')).toBe(expectedFeatures.join('|'));
 			}
 
@@ -23,9 +23,12 @@ define(['creatartis-base', 'ludorum', 'ludorum-player-cbr'], function (base, lud
 			testGameEncoding(game2.board, [-1,0,0,0,1,0,0,0,0]);
 		});
 
-		it("DirectCase encoding", function () {
+		it("DirectCase casesFromGame", function () {
+			var cbrPlayer = new ludorumCBR.games.TicTacToe.DirectCBPlayer(),
+				game = cbrPlayer.game;
+			
 			function testGameEncoding(game, features) {
-				var cases = ludorumCBR.games.TicTacToe.DirectCase.fromGame(game);
+				var cases = cbrPlayer.casesFromGame(game);
 				expect(Array.isArray(cases)).toBe(true);
 				expect(cases.length).toBe(1);
 				var _case = cases[0];
