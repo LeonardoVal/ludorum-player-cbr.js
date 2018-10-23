@@ -4,17 +4,11 @@ A `CaseBase` holds all cases for a game.
 */
 var CaseBase = exports.CaseBase = declare({
 	constructor: function CaseBase(params) {
-		this.game = params && params.game;
-		if (params && typeof params.Case === 'function') {
-			this.Case = params.Case;
-		}
 		this.random = params && params.random || Randomness.DEFAULT;
 	},
 
-	/** ## Distances ########################################################################### */
-
-	/** The default `distance` is a form of Manhattan distance, which does not count `null` or 
-	`NaN` features.
+	/** The default `distance` is a form of Manhattan distance, which does not count `null` or `NaN`
+	features.
 	*/
 	distance: function distance(features1, features2) {
 		return base.Iterable.zip(features1, features2).mapApply(function (f1, f2) {
@@ -26,181 +20,27 @@ var CaseBase = exports.CaseBase = declare({
 		}).sum();
 	},
 
-	/** ## Case acquisition #################################################################### */
-
 	/** Adding a case to the database is not implemented by default.
 	*/
 	addCase: unimplemented('CaseBase', 'addCase(_case)'),
-
-	/** The `addMatch` method runs the given `match` and adds all its game states as cases in the
-	database. It returns a promise.
-	*/
-	addMatch: function addMatch(match, options) {
-		var cdb = this,
-			retainThreshold = +options.retainThreshold || 0;
-		return match.run().then(function () {
-			var result = match.result(),
-				history = match.history,
-				entry, _case, breakStoring;
-			for (var i = history.length - 1; i >= 0; i--) {
-				entry = history[i];
-				if (entry.moves) {
-					cdb.Case.fromGame(entry.state, i, entry.moves).forEach(function (_case) {
-						_case.addResult(result);
-						cdb.addCase(_case);
-					});
-					//FIXME
-					// breakStoring = retainThreshold !== 0 && retainThreshold > cdb.closestDistance(entry.state);
-					// cdb.addCase(_case);
-					// if (breakStoring) {
-					//	break;
-					// }
-				}
-			}
-			return match;
-		});
-	},
-
-	/** The `addMatches` method takes a sequence of `matches`, runs each in order and adds all 
-	resulting game states to the database. It returns a promise.
-	*/
-	addMatches: function addMatches(matches, options) {
-		var cdb = this,
-			matchCount = 0,
-			intervalId = 0;
-		if (options.logger) {
-			intervalId = setInterval(function () {
-				options.logger.info("Added "+ matchCount +" matches.");
-			}, options.logTime || 30000);
-		}
-		return Future.sequence(matches, function (match) {
-			matchCount++;
-			return cdb.addMatch(match, options);
-		}).then(function (r) {
-			if (options.logger) {
-				options.logger.info("Added "+ matchCount +" matches.");
-			}
-			clearInterval(intervalId);
-			return r;
-		});
-	},
-
-	/** The `populate` method adds cases to the database by running several matches and adding the
-	resulting game states. The `options` argument may include the following:
-
-	+ `game`: The game state from which to start the matches. The database's `game` is used by 
-	default.
-
-	+ `n`: The number of matches to run; 100 by default.
-
-	+ `trainer`: The player to use agains the opponents. A random player is used by default.
-
-	+ `players`: The trainer's opponents to use to play the matches. The trainer is used by default.
-
-	Other options are passed to the `addMatches` method. The result is a promise.
-	*/
-	populate: function populate(options) {
-		options = options || {};
-		var cdb = this,
-			game = options.game || this.game,
-			n = isNaN(options.n) ? 100 : +options.n,
-			trainer = options.trainer || new ludorum.players.RandomPlayer({ name: 'RandomPlayer' }),
-			players = options.players || [trainer];
-		if (!Array.isArray(players)) {
-			players = [players];
-		}
-		var tournament = new ludorum.tournaments.Measurement(game, trainer, players, 1),
-			matchups = tournament.__matches__().toArray();
-		return this.addMatches(Iterable.range(Math.ceil(n / matchups.length))
-			.product(matchups)
-			.mapApply(function (i, match) {
-				return new ludorum.Match(game, match.players);
-			}), options);
-	},
-
-	/** ## Database use ######################################################################## */
 
 	/** The `cases` method returns the sequence of all cases in the database. Case order is not
 	defined.
 	*/
 	cases: unimplemented('CaseBase', 'cases(filters)'),
 
-	/** The `nn` method returns the `k` neareast neighbours of the given game state. 
+	/** The `nn` method returns the `k` neareast neighbours of the given cases. 
 	*/
-	nn: function nn(k, game) {
-		var cb = this,
-			cases = iterable(this.Case.fromGame(game)),
-			cs = iterable(this.cases()).map(function (_case) {
+	nn: function nn(k, cases) {
+		var cb = this;
+		cases = iterable(cases);
+		return iterable(this.cases()).map(function (_case) {
 				var d = cases.map(function (c) {
 					return cb.distance(_case.features, c.features);
 				}).min();
 				return [_case, d];
 			}).sorted(function (c1, c2) {
 				return c1[1] - c2[1];
-			}).toArray();
-		return cs.slice(0, +k);
-	},
-
-	/** The `closestDistance` method returns the distance to the closest case in the case base from
-	the given game state.
-	*/
-	closestDistance: function closestDistance(game) {
-		var closest = this.nn(1, game);
-		return closest.length === 0 ? Infinity : closest[0][1];
-	},
-
-	/**TODO
-	*/
-	actionEvaluations: function actionEvaluations(game, role, options) {
-		var cb = this,
-			k = options && +options.k || 10,
-			roleIndex = game.players.indexOf(role),
-			r = base.iterable(game.moves()[role]).map(function (move) {
-				return [JSON.stringify(move), [move, 0]];
-			}).toObject(),
-			knn = cb.nn(k, game);
-		iterable(knn).forEachApply(function (_case, distance) {
-			var m = r[JSON.stringify(_case.actions[roleIndex])],
-				result = _case.results[role],
-				ev, support, ratio;
-			if (m) {
-				support = _case.count / (10 + _case.count);
-				ratio = (result[0] + result[2] && 
-					((result[0] - result[2]) / (result[0] + result[2])));
-				ev = support * ratio * (1 / (1 + distance));
-				if (isNaN(ev)) {
-					raise("Action evaluation is NaN for case: ", JSON.stringify(_case),
-						" (distance= ", distance, ")!");
-				}
-				m[1] += ev;
-			}
-		});
-		return Object.values(r);
-	},
-
-	/**TODO
-	*/
-	gameEvaluation: function gameEvaluation(game, role, options) { //FIXME
-		var cb = this,
-			k = options && +options.k || 10,
-			r = base.iterable(game.moves()[role]).map(function (move) {
-				return [JSON.stringify(move), [move, 0]];
-			}).toObject(),
-			knn = cb.nn(k, game, role);
-		return iterable(knn).map(function (_case, distance) {
-			return (_case.results[role][0] - _case.results[role][2]) / (1 + distance);
-		}).sum();
-	},
-
-	/** ## Utilities ########################################################################### */
-
-	'static __SERMAT__': {
-		identifier: 'CaseBase',
-		serializer: function serialize_CaseBase(obj) { //FIXME
-			return [{
-				game: obj.game,
-				encoding: obj.hasOwnProperty('encoding') ? obj.encoding : null
-			}];
-		}
-	},
+			}).take(+k).toArray();
+	}
 }); // declare CaseBase

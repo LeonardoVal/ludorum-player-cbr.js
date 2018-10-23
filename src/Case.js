@@ -20,11 +20,6 @@ var Case = exports.Case = declare({
 		this.results = props.results;
 	},
 
-	/** The static method `fromGame` creates a case from a game state, ply number and moves
-	performed.
-	*/
-	'static fromGame': base.objects.unimplemented('Case', 'fromGame(game, ply, moves)'),
-
 	/** Adding a result to a case updates the `results` property to acount for the given `result`. 
 	*/
 	addResult: function addResult(result) {
@@ -50,13 +45,6 @@ var Case = exports.Case = declare({
 		this.ply = (this.ply * this.count + _case.ply * _case.count) / (this.count + _case.count);
 		this.count += _case.count;
 		this.addResult(_case.result);
-	},
-
-	/** Cases' features and actions can result from transformations and apply to several different
-	game states. The `getMove` method allows a case to adapt its action to a given game state. 
-	*/
-	getMove: function getMove(game, role) {
-		return this.actions[role];
 	},
 
 	// ## Databases ################################################################################
@@ -116,19 +104,19 @@ var Case = exports.Case = declare({
 
 	// ## Utilities ################################################################################
 
-	/** `emptyResults` creates an object that maps every player to an array with 3 zeros.
-	*/
-	'static emptyResults': function emptyResults(players) {
-		return iterable(players).map(function (p) {
-			return [p, [0, 0, 0]];
-		}).toObject();
-	},
-
 	/** This method adds null actions to a copy of the `moves` object.
 	*/
 	'static actionsFromMoves': function getActions(players, moves) {
 		return iterable(players).map(function (p) {
 			return [p, moves && moves.hasOwnProperty(p) ? moves[p] : null];
+		}).toObject();
+	},
+
+	/** `emptyResults` creates an object that maps every player to an array with 3 zeros.
+	*/
+	'static emptyResults': function emptyResults(players) {
+		return iterable(players).map(function (p) {
+			return [p, [0, 0, 0]];
 		}).toObject();
 	},
 
