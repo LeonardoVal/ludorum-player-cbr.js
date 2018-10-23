@@ -7,9 +7,9 @@ module.exports = function (grunt) {
 
 	require('@creatartis/creatartis-grunt').config(grunt, {
 		sourceNames: ['__prologue__',
-			'Case', 'CaseBase', 'CBRPlayer',
+			'Case', 'CaseBase', 'CaseBasedPlayer',
 			'dbs/MemoryCaseBase', 'dbs/SQLiteCaseBase',
-			'games/tictactoe', 'games/risk',
+			'games/tictactoe',// 'games/risk',
 			'utils',
 			'__epilogue__'],
 		deps: [
