@@ -57,11 +57,6 @@ var Case = exports.Case = declare({
 		this.results = props.results;
 	},
 
-	/** The static method `fromGame` creates a case from a game state, ply number and moves
-	performed.
-	*/
-	'static fromGame': base.objects.unimplemented('Case', 'fromGame(game, ply, moves)'),
-
 	/** Adding a result to a case updates the `results` property to acount for the given `result`. 
 	*/
 	addResult: function addResult(result) {
@@ -87,13 +82,6 @@ var Case = exports.Case = declare({
 		this.ply = (this.ply * this.count + _case.ply * _case.count) / (this.count + _case.count);
 		this.count += _case.count;
 		this.addResult(_case.result);
-	},
-
-	/** Cases' features and actions can result from transformations and apply to several different
-	game states. The `getMove` method allows a case to adapt its action to a given game state. 
-	*/
-	getMove: function getMove(game, role) {
-		return this.actions[role];
 	},
 
 	// ## Databases ################################################################################
@@ -153,19 +141,19 @@ var Case = exports.Case = declare({
 
 	// ## Utilities ################################################################################
 
-	/** `emptyResults` creates an object that maps every player to an array with 3 zeros.
-	*/
-	'static emptyResults': function emptyResults(players) {
-		return iterable(players).map(function (p) {
-			return [p, [0, 0, 0]];
-		}).toObject();
-	},
-
 	/** This method adds null actions to a copy of the `moves` object.
 	*/
 	'static actionsFromMoves': function getActions(players, moves) {
 		return iterable(players).map(function (p) {
 			return [p, moves && moves.hasOwnProperty(p) ? moves[p] : null];
+		}).toObject();
+	},
+
+	/** `emptyResults` creates an object that maps every player to an array with 3 zeros.
+	*/
+	'static emptyResults': function emptyResults(players) {
+		return iterable(players).map(function (p) {
+			return [p, [0, 0, 0]];
 		}).toObject();
 	},
 
@@ -191,17 +179,11 @@ A `CaseBase` holds all cases for a game.
 */
 var CaseBase = exports.CaseBase = declare({
 	constructor: function CaseBase(params) {
-		this.game = params && params.game;
-		if (params && typeof params.Case === 'function') {
-			this.Case = params.Case;
-		}
 		this.random = params && params.random || Randomness.DEFAULT;
 	},
 
-	/** ## Distances ########################################################################### */
-
-	/** The default `distance` is a form of Manhattan distance, which does not count `null` or 
-	`NaN` features.
+	/** The default `distance` is a form of Manhattan distance, which does not count `null` or `NaN`
+	features.
 	*/
 	distance: function distance(features1, features2) {
 		return base.Iterable.zip(features1, features2).mapApply(function (f1, f2) {
@@ -213,17 +195,66 @@ var CaseBase = exports.CaseBase = declare({
 		}).sum();
 	},
 
-	/** ## Case acquisition #################################################################### */
-
 	/** Adding a case to the database is not implemented by default.
 	*/
 	addCase: unimplemented('CaseBase', 'addCase(_case)'),
 
+	/** The `cases` method returns the sequence of all cases in the database. Case order is not
+	defined.
+	*/
+	cases: unimplemented('CaseBase', 'cases(filters)'),
+
+	/** The `nn` method returns the `k` neareast neighbours of the given cases. 
+	*/
+	nn: function nn(k, cases) {
+		var cb = this;
+		cases = iterable(cases);
+		return iterable(this.cases()).map(function (_case) {
+				var d = cases.map(function (c) {
+					return cb.distance(_case.features, c.features);
+				}).min();
+				return [_case, d];
+			}).sorted(function (c1, c2) {
+				return c1[1] - c2[1];
+			}).take(+k).toArray();
+	}
+}); // declare CaseBase
+
+/** # CaseBasedPlayer 
+
+*/
+var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
+	/** 
+	*/
+	constructor: function CaseBasedPlayer(params) {
+		ludorum.Player.call(this, params);
+		this.caseBase = params && params.caseBase || new MemoryCaseBase();
+		this.k = params && params.k || 20;
+	},
+
+	/** The method `casesFromGame` takes a `game` state and returns a case. This object includes
+	the game state's features, ply, actions and results.
+	*/
+	casesFromGame: base.objects.unimplemented('CaseBasedPlayer', 'casesFromGame(game, ply, moves)'),
+
+	/**
+	*/
+	newCase: function newCase(game, ply, moves, features) {
+		return new Case({
+			ply: +ply,
+			features: features,
+			actions: Case.actionsFromMoves(game.players, moves),
+			results: Case.emptyResults(game.players)
+		});
+	},
+
+	/** ## Database building #################################################################### */
+
 	/** The `addMatch` method runs the given `match` and adds all its game states as cases in the
-	database. It returns a promise.
+	player's database. It returns a promise.
 	*/
 	addMatch: function addMatch(match, options) {
-		var cdb = this,
+		var cbrPlayer = this,
 			retainThreshold = +options.retainThreshold || 0;
 		return match.run().then(function () {
 			var result = match.result(),
@@ -232,13 +263,13 @@ var CaseBase = exports.CaseBase = declare({
 			for (var i = history.length - 1; i >= 0; i--) {
 				entry = history[i];
 				if (entry.moves) {
-					cdb.Case.fromGame(entry.state, i, entry.moves).forEach(function (_case) {
+					cbrPlayer.casesFromGame(entry.state, i, entry.moves).forEach(function (_case) {
 						_case.addResult(result);
-						cdb.addCase(_case);
+						cbrPlayer.caseBase.addCase(_case);
 					});
 					//FIXME
 					// breakStoring = retainThreshold !== 0 && retainThreshold > cdb.closestDistance(entry.state);
-					// cdb.addCase(_case);
+					// cbrPlayer.caseBase.addCase(_case);
 					// if (breakStoring) {
 					//	break;
 					// }
@@ -252,7 +283,7 @@ var CaseBase = exports.CaseBase = declare({
 	resulting game states to the database. It returns a promise.
 	*/
 	addMatches: function addMatches(matches, options) {
-		var cdb = this,
+		var cbrPlayer = this,
 			matchCount = 0,
 			intervalId = 0;
 		if (options.logger) {
@@ -262,7 +293,7 @@ var CaseBase = exports.CaseBase = declare({
 		}
 		return Future.sequence(matches, function (match) {
 			matchCount++;
-			return cdb.addMatch(match, options);
+			return cbrPlayer.addMatch(match, options);
 		}).then(function (r) {
 			if (options.logger) {
 				options.logger.info("Added "+ matchCount +" matches.");
@@ -280,7 +311,7 @@ var CaseBase = exports.CaseBase = declare({
 
 	+ `n`: The number of matches to run; 100 by default.
 
-	+ `trainer`: The player to use agains the opponents. A random player is used by default.
+	+ `trainer`: The player to use agains the opponents. This player is used by default.
 
 	+ `players`: The trainer's opponents to use to play the matches. The trainer is used by default.
 
@@ -288,10 +319,9 @@ var CaseBase = exports.CaseBase = declare({
 	*/
 	populate: function populate(options) {
 		options = options || {};
-		var cdb = this,
-			game = options.game || this.game,
+		var game = options.game || this.game,
 			n = isNaN(options.n) ? 100 : +options.n,
-			trainer = options.trainer || new ludorum.players.RandomPlayer({ name: 'RandomPlayer' }),
+			trainer = options.trainer || this,
 			players = options.players || [trainer];
 		if (!Array.isArray(players)) {
 			players = [players];
@@ -305,49 +335,19 @@ var CaseBase = exports.CaseBase = declare({
 			}), options);
 	},
 
-	/** ## Database use ######################################################################## */
+	/** ## Playing ############################################################################## */
 
-	/** The `cases` method returns the sequence of all cases in the database. Case order is not
-	defined.
-	*/
-	cases: unimplemented('CaseBase', 'cases(filters)'),
-
-	/** The `nn` method returns the `k` neareast neighbours of the given game state. 
-	*/
-	nn: function nn(k, game) {
-		var cb = this,
-			cases = iterable(this.Case.fromGame(game)),
-			cs = iterable(this.cases()).map(function (_case) {
-				var d = cases.map(function (c) {
-					return cb.distance(_case.features, c.features);
-				}).min();
-				return [_case, d];
-			}).sorted(function (c1, c2) {
-				return c1[1] - c2[1];
-			}).toArray();
-		return cs.slice(0, +k);
-	},
-
-	/** The `closestDistance` method returns the distance to the closest case in the case base from
-	the given game state.
-	*/
-	closestDistance: function closestDistance(game) {
-		var closest = this.nn(1, game);
-		return closest.length === 0 ? Infinity : closest[0][1];
-	},
-
-	/**TODO
+	/** `actionEvaluations` assigns a number to every action available to the given `role` at the
+	given `game` state. It uses the case base to retrieve the _k_ most similar cases. 
 	*/
 	actionEvaluations: function actionEvaluations(game, role, options) {
-		var cb = this,
-			k = options && +options.k || 10,
-			roleIndex = game.players.indexOf(role),
+		var k = options && +options.k || this.k,
 			r = base.iterable(game.moves()[role]).map(function (move) {
 				return [JSON.stringify(move), [move, 0]];
 			}).toObject(),
-			knn = cb.nn(k, game);
+			knn = this.caseBase.nn(k, this.casesFromGame(game));
 		iterable(knn).forEachApply(function (_case, distance) {
-			var m = r[JSON.stringify(_case.actions[roleIndex])],
+			var m = r[JSON.stringify(_case.actions[role])],
 				result = _case.results[role],
 				ev, support, ratio;
 			if (m) {
@@ -365,11 +365,12 @@ var CaseBase = exports.CaseBase = declare({
 		return Object.values(r);
 	},
 
-	/**TODO
+	/** `gameEvaluation` assigns a number to the given `game` state. It uses the case base to
+	retrieve the _k_ most similar cases, and aggregates their results. It is suitable for an 
+	heuristic player. 
 	*/
 	gameEvaluation: function gameEvaluation(game, role, options) { //FIXME
-		var cb = this,
-			k = options && +options.k || 10,
+		var k = options && +options.k || this.k,
 			r = base.iterable(game.moves()[role]).map(function (move) {
 				return [JSON.stringify(move), [move, 0]];
 			}).toObject(),
@@ -379,32 +380,10 @@ var CaseBase = exports.CaseBase = declare({
 		}).sum();
 	},
 
-	/** ## Utilities ########################################################################### */
-
-	'static __SERMAT__': {
-		identifier: 'CaseBase',
-		serializer: function serialize_CaseBase(obj) { //FIXME
-			return [{
-				game: obj.game,
-				encoding: obj.hasOwnProperty('encoding') ? obj.encoding : null
-			}];
-		}
-	},
-}); // declare CaseBase
-
-/** # CBR Player 
-
-*/
-var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
-	/** 
-	*/
-	constructor: function CBRPlayer(params) {
-		ludorum.Player.call(this, params);
-		this.caseBase = params && params.caseBase;
-		this.k = params && params.k || 20;
-	},
-
-	/** 
+	/** `checkMoves` classifies all moves available to the given `role` at the given `game` state.
+	The result is an array of two arrays of moves. The first array has all the winning moves, while
+	the second array has all the moves that do not finish the game. Losing and drawing moves are
+	discarded.  
 	*/
 	checkMoves: function checkMoves(game, role) {
 		var r = [[], []];
@@ -420,9 +399,9 @@ var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
 		return r;
 	},
 
-	/** A `CBRPlayer` takes the action evaluations from the case base, and splits them into actions
-	with possitive evaluations and the ones with evaluations less than or equal to zero. If there
-	are possitively evaluated actions, one of these is chosen randomly with a probability 
+	/** A `CaseBasedPlayer` takes the action evaluations from the case base, and splits them into
+	actions with possitive evaluations and the ones with evaluations less than or equal to zero. If 
+	there are possitively evaluated actions, one of these is chosen randomly with a probability 
 	proportional to the evaluation. If all actions have non possitive evaluations, one of these is
 	chosen with a probability inversely proportional to the evaluation.   
 	*/
@@ -440,7 +419,7 @@ var CBRPlayer = exports.CBRPlayer = base.declare(ludorum.Player, {
 		var actions = iterable(checkMoves[1]).map(function (action) {
 				return [action +'', [action, 0]];
 			}).toObject();
-		this.caseBase.actionEvaluations(game, role, { k: this.k }).forEach(function (t) {
+		this.actionEvaluations(game, role, { k: this.k }).forEach(function (t) {
 			var entry = actions[t[0] +''];
 			if (entry) {
 				entry[1] += t[1];
@@ -519,6 +498,9 @@ var MemoryCaseBase = dbs.MemoryCaseBase = declare(CaseBase, {
 		CaseBase.call(this, params);
 		this.__cases__ = [];
 		this.__index__ = {};
+		if (params && params.__cases__) {
+			params.__cases__.forEach(this.addCase.bind(this));
+		}
 	},
 
 	cases: function cases() {
@@ -527,14 +509,25 @@ var MemoryCaseBase = dbs.MemoryCaseBase = declare(CaseBase, {
 	
 	addCase: function addCase(_case) {
 		var id = _case.identifier();
-		if (this.__index__[id]) {
+		if (this.__index__.hasOwnProperty(id)) {
 			var storedCase = this.__cases__[this.__index__[id]];
 			storedCase.merge(_case);
 		} else {
 			var i = this.__cases__.push(_case) - 1;
 			this.__index__[id] = i;
 		}
-	}
+	},
+
+	/** ## Utilities ############################################################################ */
+
+	'static __SERMAT__': {
+		identifier: 'MemoryCaseBase',
+		serializer: function serialize_MemoryCaseBase(obj) {
+			return [{
+				__cases__: obj.__cases__
+			}];
+		}
+	},
 }); // declare MemoryCaseBase
 
 /** # SQLiteCaseBase
@@ -667,17 +660,40 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 
 
 
-/**
+/** # TicTacToe CBR
  
 */
 games.TicTacToe = (function () {
-	function directFeatures(game) {
+	/** ## Features direct from the board ####################################################### */
+	
+	var directFeatures = function features(game) {
 		var board = typeof game === 'string' ? game : game.board;
 		return board.split('').map(function (chr) {
 			return chr === 'X' ? (+1) : chr === 'O' ? (-1) : 0; 
 		});
-	}
+	};
 
+	var DirectCBPlayer = declare(CaseBasedPlayer, {
+		constructor: function DirectCBPlayer(params) {
+			CaseBasedPlayer.call(this, params);
+		}, 
+
+		game: new ludorum.games.TicTacToe(),
+
+		features: directFeatures,
+		
+		casesFromGame: function casesFromGame(game, ply, moves) {
+			return [
+				this.newCase(game, ply, moves, this.features(game))
+			];
+		}
+	}); // declare TicTacToe.DirectCBPlayer
+
+	/** ## Equivalence based on board symmetries and rotations. ################################# */
+
+	/** `MAPPINGS` is a list of square indexes that define transformations between equivalent
+	Tictactoe boards.
+	*/
 	var MAPPINGS = [
 		[0,1,2,3,4,5,6,7,8], // original
 		[2,1,0,5,4,3,8,7,6], // vertical axis symmetry
@@ -689,7 +705,7 @@ games.TicTacToe = (function () {
 		[0,3,6,1,4,7,2,5,8]  // 90 clockwise rotation + vertical axis symmetry
 	];
 
-	function equivalent(game) {
+	var equivalent = function equivalent(game) {
 		var board = typeof game === 'string' ? game : game.board,
 			maps = MAPPINGS.map(function (mapping) {
 				return mapping.map(function (i) {
@@ -698,89 +714,50 @@ games.TicTacToe = (function () {
 			});
 		maps.sort();
 		return maps;
-	}
+	};
 
-	return {
-		directFeatures: directFeatures,
+	var EquivalenceCBPlayer = declare(CaseBasedPlayer, {
+		constructor: function EquivalenceCBPlayer(params) {
+			CaseBasedPlayer.call(this, params);
+		}, 
 
-		/**
+		game: new ludorum.games.TicTacToe(),
+
+		features: directFeatures,
+
+		MAPPINGS: MAPPINGS,
+
+		/** 
 		*/
-		DirectCase: declare(Case, {
-			'static fromGame': function fromGame(game, ply, moves) {
-				var _case = new this({
-						ply: +ply,
-						features: directFeatures(game),
-						actions: Case.actionsFromMoves(game.players, moves),
-						results: Case.emptyResults(game.players)
-					});
-				return [_case];
+		casesFromGame: function fromGame(game, ply, moves) {
+			var cbrPlayer = this,
+				board = game.board.split(''),
+				activePlayer = game.activePlayer();
+			if (moves) {
+				board[moves[activePlayer]] = '!';
 			}
-		}),
-
-		equivalent: equivalent,
-
-		/**
-		*/
-		EquivalenceCase: declare(Case, {
-			'static fromGame': function fromGame(game, ply, moves) {
-				var board = game.board.split(''),
-					activePlayer = game.activePlayer();
-				if (moves) {
-					board[moves[activePlayer]] = '!';
-				}
-				var boards = equivalent(board.join('')).map(function (b) {
-					var m = b.indexOf('!');
-					return b.replace('!', '_') + m;
-				});
-				boards.sort();
-				board = boards[0];
+			var boards = equivalent(board.join('')).map(function (b) {
+				var m = b.indexOf('!');
+				return b.replace('!', '_') + m;
+			});
+			return boards.map(function  (board) {
 				if (moves) {
 					moves[activePlayer] = +(board.substr(9));
 				}
-				var _case = new this({
-						ply: +ply,
-						features: directFeatures(board.substr(0,9)),
-						actions: Case.actionsFromMoves(game.players, moves),
-						results: Case.emptyResults(game.players)
-					});
-				return [_case];
-			}
-		})
+				return cbrPlayer.newCase(game, ply, moves, cbrPlayer.features(board.substr(0,9)));
+			});
+		}
+	}); // declare TicTacToe.EquivalenceCBPlayer
+
+	return {
+		directFeatures: directFeatures,
+		DirectCBPlayer: DirectCBPlayer,
+
+		MAPPINGS: MAPPINGS,
+		equivalent: equivalent,
+		EquivalenceCBPlayer: EquivalenceCBPlayer
 	};
-})(); // declare TicTacToe.DirectCase
-
-/**
- */
-games.Risk = (function () {
-  return {
-    /** The "Risk" encoding has 83 features , 42 to define the number of troops in a territory,
-     *  42 to define to which player that territory corresponds based on its turn,
-     *  being 0 the corresponding player with the current turn,
-     *  1 the next and so successively and 1 that determines the stage of the game  */
-
-    Turn: function turn(game, otherPlayer) {
-      var active = game.players.indexOf(active);
-      var other = game.players.indexOf(otherPlayer);
-      if (other > active) {
-        return other - active;
-      } else {
-        return 6 - (active - other);
-      }
-    },
-
-    Risk: function encodingRisk(game, moves, ply) {
-      return {
-        ply: ply,
-        features: game.boardMap.territories
-          .map(t => turn(game, s[t][0])).concat(s[t][1]).concat(stage), // For each territory , assign colour and number of troops , change colour based on turn.
-        actions: !moves ? null : game.players.map(function (p) {
-          return moves.hasOwnProperty(p) ? moves[p] : null;
-        })
-      };
-    }
-  };
 })();
-
 
 /** # Utilities
 
