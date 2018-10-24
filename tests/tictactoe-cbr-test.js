@@ -5,19 +5,20 @@ var ludorumCBR = require('../build/ludorum-player-cbr'),
 function assessCBR(trainer, name) {
 	LOGGER.info("Assessing TicTacToe with "+ name +".");
 	var cbPlayer = new ludorumCBR.games.TicTacToe.DirectCBPlayer({
+			name: 'DirectCBPlayer',
 			k: 30,
 			caseBase: new ludorumCBR.dbs.SQLiteCaseBase({
-				db: './cbr-tictactoe.sqlite',
+				db: './tictactoe-cbr.sqlite',
 				tableName: 'CB_TicTacToe_'+ name 
 			})
 		});
 	return cbPlayer.populate({ 
-		n: 100,
+		n: 1000,
 		trainer: trainer, 
 		logger: LOGGER 
 	}).then(function () {
 		LOGGER.info("Evaluating CBRPlayer for TicTacToe trained with "+ name +".");
-		return cbPlayer.assess(new ludorum.players.RandomPlayer(), { n: 300, logger: LOGGER })
+		return cbPlayer.assess(new ludorum.players.RandomPlayer(), { n: 800, logger: LOGGER })
 			.then(function (evaluation) {
 				LOGGER.info("Against RANDOM: "+ JSON.stringify(evaluation));
 			});
