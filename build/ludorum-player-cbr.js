@@ -73,7 +73,8 @@ var Case = exports.Case = declare({
 				raise('Invalid result (', r, ')!');
 			}
 		}
-		this.count = (this.count || 0) + 1; 
+		this.count = (this.count || 0) + 1;
+		return this;
 	},
 
 	/** Merging `this` case with another case updates the properties `ply`, `count` and `results`.
@@ -125,10 +126,10 @@ var Case = exports.Case = declare({
 				features[+k.substr(1)] = record[k];
 			} else if (k.substr(0, 2) === 'a_') {
 				actions[k.substr(2)] = JSON.parse(record[k]);
+			} else if (k.substr(0, 4) === 'won_') {
+				var p = k.substr(4);
+				results[p] = [record['won_'+ p], record['tied_'+ p], record['lost_'+ p]];
 			}
-		}
-		for (var p in results) {
-			results[p] = [record['won_'+ p], record['tied_'+ p], record['lost_'+ p]];
 		}
 		return new this({ 
 			count: record.count,
@@ -189,7 +190,7 @@ var CaseBase = exports.CaseBase = declare({
 	*/
 	init: unimplemented('CaseBase', 'init(game, player)'),
 
-	/** Adding a case to the database is not implemented by default.
+	/** Adding a case (or cases) to the database is not implemented by default.
 	*/
 	addCase: unimplemented('CaseBase', 'addCase(_case)'),
 
@@ -268,23 +269,14 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 			retainThreshold = +options.retainThreshold || 0;
 		return match.run().then(function () {
 			var result = match.result(),
-				history = match.history,
-				entry, _case, breakStoring;
-			for (var i = history.length - 1; i >= 0; i--) {
-				entry = history[i];
-				if (entry.moves) {
-					cbrPlayer.casesFromGame(entry.state, i, entry.moves).forEach(function (_case) {
-						_case.addResult(result);
-						cbrPlayer.caseBase.addCase(_case);
-					});
-					//FIXME
-					// breakStoring = retainThreshold !== 0 && retainThreshold > cdb.closestDistance(entry.state);
-					// cbrPlayer.caseBase.addCase(_case);
-					// if (breakStoring) {
-					//	break;
-					// }
-				}
-			}
+				cases = iterable(match.history).filter(function (entry) {
+					return !entry.moves;
+				}, function (entry, i) {
+					return cbrPlayer.casesFromGame(entry.state, i, entry.moves);  
+				}).flatten().map(function (_case) {
+					return _case.addResult(result);
+				});
+			cbrPlayer.caseBase.addCase(cases);
 			return match;
 		});
 	},
@@ -350,7 +342,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 	/** `actionEvaluations` assigns a number to every action available to the given `role` at the
 	given `game` state. It uses the case base to retrieve the _k_ most similar cases. 
 	*/
-	actionEvaluations: function actionEvaluations(game, role, options) {
+	actionEvaluations: function actionEvaluations(game, role, options) { //FIXME
 		var k = options && +options.k || this.k,
 			r = base.iterable(game.moves()[role]).map(function (move) {
 				return [JSON.stringify(move), [move, 0]];
@@ -458,12 +450,12 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 
 	// Utilities. /////////////////////////////////////////////////////////////////////////////////
 
-	assess: function assess(players, options) {
+	assess: function assess(players, options) { //FIXME
 		if (!Array.isArray(players)) {
 			players = [players];
 		}
 		var cbrPlayer = this,
-			game = this.caseBase.game,
+			game = this.game,
 			evaluation = iterable(players).map(function (player) {
 				return [player.name, iterable(game.players).map(function (p) {
 						return [p, [0,0,0]];
@@ -522,13 +514,17 @@ var MemoryCaseBase = dbs.MemoryCaseBase = declare(CaseBase, {
 	},
 	
 	addCase: function addCase(_case) {
-		var id = _case.identifier();
-		if (this.__index__.hasOwnProperty(id)) {
-			var storedCase = this.__cases__[this.__index__[id]];
-			storedCase.merge(_case);
+		if (_case instanceof Case) {
+			var id = _case.identifier();
+			if (this.__index__.hasOwnProperty(id)) {
+				var storedCase = this.__cases__[this.__index__[id]];
+				storedCase.merge(_case);
+			} else {
+				var i = this.__cases__.push(_case) - 1;
+				this.__index__[id] = i;
+			}
 		} else {
-			var i = this.__cases__.push(_case) - 1;
-			this.__index__[id] = i;
+			iterable(_case).forEach(this.addCase.bind(this));
 		}
 	},
 
@@ -618,22 +614,26 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 	},
 	
 	addCase: function addCase(_case) {
-		var record = _case.record(),
-			fields = Object.keys(record),
-			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' ('+ fields.join(',') +
-				') VALUES ('+ Iterable.repeat('?', fields.length).join(',') +')',
-			isNew = this.__runSQL__(sql, fields.map(function (f) {
-					return record[f];
-				})).changes > 0;
-		if (!isNew) { // Insert was ignored because the case is already stored.
-			this.__runSQL__('UPDATE '+ this.__tableName__ +' '+
-				'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
-				Object.keys(record).filter(function (k) {
-					return /^(won_|tied_|lost_)/.test(k);
-				}).map(function (k) {
-					return k +' = '+ k +' + '+ record[k];
-				}).join(', ') +' WHERE id = \''+ record.id +'\''
-			);
+		if (_case instanceof Case) {
+			var record = _case.record(),
+				fields = Object.keys(record),
+				sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' ('+ fields.join(',') +
+					') VALUES ('+ Iterable.repeat('?', fields.length).join(',') +')',
+				isNew = this.__runSQL__(sql, fields.map(function (f) {
+						return record[f];
+					})).changes > 0;
+			if (!isNew) { // Insert was ignored because the case is already stored.
+				this.__runSQL__('UPDATE '+ this.__tableName__ +' '+
+					'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
+					Object.keys(record).filter(function (k) {
+						return /^(won_|tied_|lost_)/.test(k);
+					}).map(function (k) {
+						return k +' = '+ k +' + '+ record[k];
+					}).join(', ') +' WHERE id = \''+ record.id +'\''
+				);
+			}
+		} else {
+			iterable(_case).forEach(this.addCase.bind(this));
 		}
 	},
 
