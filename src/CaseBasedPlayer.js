@@ -37,23 +37,14 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 			retainThreshold = +options.retainThreshold || 0;
 		return match.run().then(function () {
 			var result = match.result(),
-				history = match.history,
-				entry, _case, breakStoring;
-			for (var i = history.length - 1; i >= 0; i--) {
-				entry = history[i];
-				if (entry.moves) {
-					cbrPlayer.casesFromGame(entry.state, i, entry.moves).forEach(function (_case) {
-						_case.addResult(result);
-						cbrPlayer.caseBase.addCase(_case);
-					});
-					//FIXME
-					// breakStoring = retainThreshold !== 0 && retainThreshold > cdb.closestDistance(entry.state);
-					// cbrPlayer.caseBase.addCase(_case);
-					// if (breakStoring) {
-					//	break;
-					// }
-				}
-			}
+				cases = iterable(match.history).filter(function (entry) {
+					return !entry.moves;
+				}, function (entry, i) {
+					return cbrPlayer.casesFromGame(entry.state, i, entry.moves);  
+				}).flatten().map(function (_case) {
+					return _case.addResult(result);
+				});
+			cbrPlayer.caseBase.addCase(cases);
 			return match;
 		});
 	},
@@ -232,7 +223,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 			players = [players];
 		}
 		var cbrPlayer = this,
-			game = this.caseBase.game,
+			game = this.game,
 			evaluation = iterable(players).map(function (player) {
 				return [player.name, iterable(game.players).map(function (p) {
 						return [p, [0,0,0]];
