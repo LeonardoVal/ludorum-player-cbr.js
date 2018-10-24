@@ -36,7 +36,8 @@ var Case = exports.Case = declare({
 				raise('Invalid result (', r, ')!');
 			}
 		}
-		this.count = (this.count || 0) + 1; 
+		this.count = (this.count || 0) + 1;
+		return this;
 	},
 
 	/** Merging `this` case with another case updates the properties `ply`, `count` and `results`.
@@ -88,10 +89,10 @@ var Case = exports.Case = declare({
 				features[+k.substr(1)] = record[k];
 			} else if (k.substr(0, 2) === 'a_') {
 				actions[k.substr(2)] = JSON.parse(record[k]);
+			} else if (k.substr(0, 4) === 'won_') {
+				var p = k.substr(4);
+				results[p] = [record['won_'+ p], record['tied_'+ p], record['lost_'+ p]];
 			}
-		}
-		for (var p in results) {
-			results[p] = [record['won_'+ p], record['tied_'+ p], record['lost_'+ p]];
 		}
 		return new this({ 
 			count: record.count,
