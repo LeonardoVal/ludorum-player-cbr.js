@@ -21,13 +21,17 @@ var MemoryCaseBase = dbs.MemoryCaseBase = declare(CaseBase, {
 	},
 	
 	addCase: function addCase(_case) {
-		var id = _case.identifier();
-		if (this.__index__.hasOwnProperty(id)) {
-			var storedCase = this.__cases__[this.__index__[id]];
-			storedCase.merge(_case);
+		if (_case instanceof Case) {
+			var id = _case.identifier();
+			if (this.__index__.hasOwnProperty(id)) {
+				var storedCase = this.__cases__[this.__index__[id]];
+				storedCase.merge(_case);
+			} else {
+				var i = this.__cases__.push(_case) - 1;
+				this.__index__[id] = i;
+			}
 		} else {
-			var i = this.__cases__.push(_case) - 1;
-			this.__index__[id] = i;
+			iterable(_case).forEach(this.addCase.bind(this));
 		}
 	},
 

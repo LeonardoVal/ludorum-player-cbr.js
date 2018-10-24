@@ -14,7 +14,7 @@ var CaseBase = exports.CaseBase = declare({
 	*/
 	init: unimplemented('CaseBase', 'init(game, player)'),
 
-	/** Adding a case to the database is not implemented by default.
+	/** Adding a case (or cases) to the database is not implemented by default.
 	*/
 	addCase: unimplemented('CaseBase', 'addCase(_case)'),
 

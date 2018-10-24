@@ -72,22 +72,26 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 	},
 	
 	addCase: function addCase(_case) {
-		var record = _case.record(),
-			fields = Object.keys(record),
-			sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' ('+ fields.join(',') +
-				') VALUES ('+ Iterable.repeat('?', fields.length).join(',') +')',
-			isNew = this.__runSQL__(sql, fields.map(function (f) {
-					return record[f];
-				})).changes > 0;
-		if (!isNew) { // Insert was ignored because the case is already stored.
-			this.__runSQL__('UPDATE '+ this.__tableName__ +' '+
-				'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
-				Object.keys(record).filter(function (k) {
-					return /^(won_|tied_|lost_)/.test(k);
-				}).map(function (k) {
-					return k +' = '+ k +' + '+ record[k];
-				}).join(', ') +' WHERE id = \''+ record.id +'\''
-			);
+		if (_case instanceof Case) {
+			var record = _case.record(),
+				fields = Object.keys(record),
+				sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' ('+ fields.join(',') +
+					') VALUES ('+ Iterable.repeat('?', fields.length).join(',') +')',
+				isNew = this.__runSQL__(sql, fields.map(function (f) {
+						return record[f];
+					})).changes > 0;
+			if (!isNew) { // Insert was ignored because the case is already stored.
+				this.__runSQL__('UPDATE '+ this.__tableName__ +' '+
+					'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
+					Object.keys(record).filter(function (k) {
+						return /^(won_|tied_|lost_)/.test(k);
+					}).map(function (k) {
+						return k +' = '+ k +' + '+ record[k];
+					}).join(', ') +' WHERE id = \''+ record.id +'\''
+				);
+			}
+		} else {
+			iterable(_case).forEach(this.addCase.bind(this));
 		}
 	},
 
