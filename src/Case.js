@@ -18,6 +18,7 @@ var Case = exports.Case = declare({
 		this.features = props.features;
 		this.actions = props.actions;
 		this.results = props.results;
+		this.id = props.id || this.identifier();
 	},
 
 	/** Adding a result to a case updates the `results` property to acount for the given `result`. 
@@ -61,7 +62,7 @@ var Case = exports.Case = declare({
 	record: function record(obj) {
 		obj = obj || {};
 		var p;
-		obj.id = this.identifier();
+		obj.id = record.id;
 		obj.ply = this.ply;
 		obj.count = this.count;
 		this.features.forEach(function (f, i) {
