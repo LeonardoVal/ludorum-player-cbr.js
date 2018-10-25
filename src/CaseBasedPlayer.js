@@ -18,13 +18,18 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 
 	/**
 	*/
-	newCase: function newCase(game, ply, moves, features) {
-		return new Case({
-			ply: +ply,
-			features: features,
-			actions: Case.actionsFromMoves(game.players, moves),
-			results: Case.emptyResults(game.players)
-		});
+	newCase: function newCase(game, ply, moves, _case) {
+		_case = _case || {};
+		if (!_case.hasOwnProperty('ply')) {
+			_case.ply = +ply;
+		}
+		if (!_case.hasOwnProperty('actions')) {
+			_case.actions = Case.actionsFromMoves(game.players, moves);
+		}
+		if (!_case.hasOwnProperty('results')) {
+			_case.results = Case.emptyResults(game.players);
+		}
+		return new Case(_case);
 	},
 
 	/** ## Database building #################################################################### */

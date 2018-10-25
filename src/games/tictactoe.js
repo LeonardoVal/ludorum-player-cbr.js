@@ -22,7 +22,7 @@ games.TicTacToe = (function () {
 		
 		casesFromGame: function casesFromGame(game, ply, moves) {
 			return [
-				this.newCase(game, ply, moves, this.features(game))
+				this.newCase(game, ply, moves, { features: this.features(game) })
 			];
 		}
 	}); // declare TicTacToe.DirectCBPlayer
@@ -83,7 +83,9 @@ games.TicTacToe = (function () {
 				if (moves) {
 					moves[activePlayer] = +(board.substr(9));
 				}
-				return cbrPlayer.newCase(game, ply, moves, cbrPlayer.features(board.substr(0,9)));
+				return cbrPlayer.newCase(game, ply, moves, 
+					{ features: cbrPlayer.features(board.substr(0,9)) }
+				);
 			});
 		}
 	}); // declare TicTacToe.EquivalenceCBPlayer
