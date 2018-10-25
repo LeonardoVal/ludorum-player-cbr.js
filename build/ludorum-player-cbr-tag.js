@@ -49,6 +49,7 @@ var Case = exports.Case = declare({
 		this.features = props.features;
 		this.actions = props.actions;
 		this.results = props.results;
+		this.id = props.id || this.identifier();
 	},
 
 	/** Adding a result to a case updates the `results` property to acount for the given `result`. 
@@ -92,7 +93,7 @@ var Case = exports.Case = declare({
 	record: function record(obj) {
 		obj = obj || {};
 		var p;
-		obj.id = this.identifier();
+		obj.id = record.id;
 		obj.ply = this.ply;
 		obj.count = this.count;
 		this.features.forEach(function (f, i) {
@@ -244,13 +245,18 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 
 	/**
 	*/
-	newCase: function newCase(game, ply, moves, features) {
-		return new Case({
-			ply: +ply,
-			features: features,
-			actions: Case.actionsFromMoves(game.players, moves),
-			results: Case.emptyResults(game.players)
-		});
+	newCase: function newCase(game, ply, moves, _case) {
+		_case = _case || {};
+		if (!_case.hasOwnProperty('ply')) {
+			_case.ply = +ply;
+		}
+		if (!_case.hasOwnProperty('actions')) {
+			_case.actions = Case.actionsFromMoves(game.players, moves);
+		}
+		if (!_case.hasOwnProperty('results')) {
+			_case.results = Case.emptyResults(game.players);
+		}
+		return new Case(_case);
 	},
 
 	/** ## Database building #################################################################### */
@@ -684,7 +690,7 @@ games.TicTacToe = (function () {
 		
 		casesFromGame: function casesFromGame(game, ply, moves) {
 			return [
-				this.newCase(game, ply, moves, this.features(game))
+				this.newCase(game, ply, moves, { features: this.features(game) })
 			];
 		}
 	}); // declare TicTacToe.DirectCBPlayer
@@ -745,7 +751,9 @@ games.TicTacToe = (function () {
 				if (moves) {
 					moves[activePlayer] = +(board.substr(9));
 				}
-				return cbrPlayer.newCase(game, ply, moves, cbrPlayer.features(board.substr(0,9)));
+				return cbrPlayer.newCase(game, ply, moves, 
+					{ features: cbrPlayer.features(board.substr(0,9)) }
+				);
 			});
 		}
 	}); // declare TicTacToe.EquivalenceCBPlayer
