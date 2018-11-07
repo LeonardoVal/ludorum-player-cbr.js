@@ -219,47 +219,5 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 			result = this.random.weightedChoice(this.random.normalizeWeights(negativeActions));
 		}
 		return result;
-	},
-
-	// Utilities. /////////////////////////////////////////////////////////////////////////////////
-
-	assess: function assess(players, options) { //FIXME
-		if (!Array.isArray(players)) {
-			players = [players];
-		}
-		var cbrPlayer = this,
-			game = this.game,
-			evaluation = iterable(players).map(function (player) {
-				return [player.name, iterable(game.players).map(function (p) {
-						return [p, [0,0,0]];
-					}).toObject()];
-				}).toObject(),
-			n = options && +options.n || 300,
-			finishedMatchesCount = 0,
-			intervalId = 0;
-		if (options.logger) {
-			intervalId = setInterval(function () {
-				options.logger.info("Assessment finished "+ finishedMatchesCount +" matches.");
-			}, options.logTime || 30000);
-		}
-		return base.Future.sequence(base.Iterable.range(n).product(players), function (tuple) {
-			var player = tuple[1],
-				matchPlayers = base.Iterable.repeat(player, game.players.length).toArray(),
-				playerIndex = tuple[0] % game.players.length,
-				playerRole = game.players[playerIndex];
-			matchPlayers[playerIndex] = cbrPlayer;
-			var match = new ludorum.Match(game, matchPlayers);
-			return match.run().then(function () {
-				var r = match.result()[playerRole];
-				evaluation[player.name][playerRole][r > 0 ? 0 : r < 0 ? 2 : 1]++;
-				finishedMatchesCount++;
-			});
-		}).then(function () {
-			clearInterval(intervalId);
-			if (options.logger) {
-				options.logger.info("Assessment finished "+ finishedMatchesCount +" matches.");
-			}
-			return evaluation;
-		});
 	}
 }); // declare CBRPlayer
