@@ -2,35 +2,31 @@ var ludorumCBR = require('../build/ludorum-player-cbr'),
 	ludorum = require('ludorum'),
 	base = require('creatartis-base');
 
-function assessCBR(trainer, name) {
-	LOGGER.info("Assessing TicTacToe with "+ name +".");
-	var cbPlayer = new ludorumCBR.games.TicTacToe.DirectCBPlayer({
+var LOGGER = base.Logger.ROOT;
+	LOGGER.appendToConsole();
+
+base.Future.sequence(base.iterable({
+	RANDOM: new ludorum.players.RandomPlayer({ name: 'RANDOM' }),
+	MMAB2: new ludorum.players.AlphaBetaPlayer({ name: 'MMAB2', horizon: 2 }),
+	MMAB4: new ludorum.players.AlphaBetaPlayer({ name: 'MMAB4', horizon: 4 }),
+	MMAB6: new ludorum.players.AlphaBetaPlayer({ name: 'MMAB6', horizon: 6 })
+}), function (tuple) {
+	var name = tuple[0],
+		trainer = tuple[1];
+	return ludorumCBR.utils.populateAndAssess(
+		new ludorumCBR.games.TicTacToe.DirectCBPlayer({
 			name: 'DirectCBPlayer',
 			k: 30,
 			caseBase: new ludorumCBR.dbs.SQLiteCaseBase({
-				db: './tictactoe-cbr.sqlite',
+				db: './tests/dbs/tictactoe-cbr.sqlite',
 				tableName: 'CB_TicTacToe_'+ name 
 			})
+		}), {
+			trainer: trainer,
+			populateCount: 1000,
+			assessCount: 800,
+			logger: LOGGER
 		});
-	return cbPlayer.populate({ 
-		n: 1000,
-		trainer: trainer, 
-		logger: LOGGER 
-	}).then(function () {
-		LOGGER.info("Evaluating CBRPlayer for TicTacToe trained with "+ name +".");
-		return cbPlayer.assess(new ludorum.players.RandomPlayer(), { n: 800, logger: LOGGER })
-			.then(function (evaluation) {
-				LOGGER.info("Against RANDOM: "+ JSON.stringify(evaluation));
-			});
-	});
-}
-
-// Main ////////////////////////////////////////////////////////////////////////////////////////////
-
-var LOGGER = base.Logger.ROOT;
-LOGGER.appendToConsole();
-assessCBR(new ludorum.players.RandomPlayer(), 'RANDOM')
-.then(assessCBR.bind(null, new ludorum.players.AlphaBetaPlayer({ horizon: 2 }), 'MMAB2'))
-.then(assessCBR.bind(null, new ludorum.players.AlphaBetaPlayer({ horizon: 4 }), 'MMAB4'))
-.then(assessCBR.bind(null, new ludorum.players.AlphaBetaPlayer({ horizon: 6 }), 'MMAB6'))
-.then(process.exit);
+}).then(function () {
+	process.exit();
+});
