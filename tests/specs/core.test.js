@@ -13,14 +13,14 @@ define(['creatartis-base', 'ludorum', 'ludorum-player-cbr'], function (base, lud
 	}); // layout
 
 	describe("Case bases with TicTacToe", function () { ///////////////////////////////////////////
-		/*
-		*/
+		var training = ludorumCBR.training;
+
 		it("populate MemoryCaseBase", function (done) {
 			var cbrPlayer = new ludorumCBR.games.TicTacToe.DirectCBPlayer();
 			expect(cbrPlayer.caseBase instanceof ludorumCBR.dbs.MemoryCaseBase).toBe(true);
 			var db = cbrPlayer.caseBase;
 			expect(db.cases().toArray().length).toBe(0);
-			cbrPlayer.populate({ n: 1 }).then(function () {
+			training.populate(cbrPlayer, { n: 1 }).then(function () {
 				expect(db.cases().toArray().length).toBeGreaterThan(0);
 				done();
 			});
@@ -37,7 +37,7 @@ define(['creatartis-base', 'ludorum', 'ludorum-player-cbr'], function (base, lud
 
 		it("playing CBRPlayer with populated case base", function (done) {
 			var cbrPlayer = new ludorumCBR.games.TicTacToe.DirectCBPlayer({ k: 10 });
-			cbrPlayer.populate({ n: 5 }).then(function () {
+			training.populate(cbrPlayer, { n: 5 }).then(function () {
 				var match = new ludorum.Match(cbrPlayer.game, [cbrPlayer, cbrPlayer]);
 				match.run().then(function () {
 					expect(match.history.length).toBeGreaterThan(4);
