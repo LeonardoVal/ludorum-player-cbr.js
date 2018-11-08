@@ -23,10 +23,12 @@ function __init__(base, Sermat, ludorum) { "use strict";
 
 			dbs: { /* Namespace for different types of case bases. */ },
 			games: { /* Namespace for functions and definitions for supporting games. */ },
+			training: { /* Namespace for functions and definitions related to populate or curate case bases. */ },
 			utils: { /* Namespace for utility functions. */ }
 		},
 		dbs = exports.dbs,
 		games = exports.games,
+		training = exports.training,
 		utils = exports.utils
 	;
 
@@ -87,7 +89,7 @@ var Case = exports.Case = declare({
 	/** An `identifier` for a case is a string that can be used as a primary key of a case base.
 	*/
 	identifier: function identifier() {
-		return this.features.join(',') + JSON.stringify(this.actions);
+		return this.features.join('|') + JSON.stringify(this.actions);
 	},
 
 	/** Return a database record for this case.
@@ -95,7 +97,7 @@ var Case = exports.Case = declare({
 	record: function record(obj) {
 		obj = obj || {};
 		var p;
-		obj.id = record.id;
+		obj.id = this.id;
 		obj.ply = this.ply;
 		obj.count = this.count;
 		this.features.forEach(function (f, i) {
@@ -161,6 +163,7 @@ var Case = exports.Case = declare({
 		identifier: 'Case',
 		serializer: function serialize_Case(obj) {
 			return [{
+				id: obj.id,
 				count: obj.count,
 				ply: obj.ply,
 				features: obj.features,
@@ -245,7 +248,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 	*/
 	casesFromGame: base.objects.unimplemented('CaseBasedPlayer', 'casesFromGame(game, ply, moves)'),
 
-	/**
+	/** `newCase` is a helper for building a case.
 	*/
 	newCase: function newCase(game, ply, moves, _case) {
 		_case = _case || {};
@@ -261,7 +264,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 		return new Case(_case);
 	},
 
-	/** ## Database building #################################################################### */
+	/** ## Database building ################################################################### */
 
 	/** The `addMatch` method runs the given `match` and adds all its game states as cases in the
 	player's database. It returns a promise.
@@ -272,8 +275,8 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 		return match.run().then(function () {
 			var result = match.result(),
 				cases = iterable(match.history).filter(function (entry) {
-					return !entry.moves;
-				}, function (entry, i) {
+					return !!entry.moves;
+				}).map(function (entry, i) {
 					return cbrPlayer.casesFromGame(entry.state, i, entry.moves);  
 				}).flatten().map(function (_case) {
 					return _case.addResult(result);
@@ -307,39 +310,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 		});
 	},
 
-	/** The `populate` method adds cases to the database by running several matches and adding the
-	resulting game states. The `options` argument may include the following:
-
-	+ `game`: The game state from which to start the matches. The database's `game` is used by 
-	default.
-
-	+ `n`: The number of matches to run; 100 by default.
-
-	+ `trainer`: The player to use agains the opponents. This player is used by default.
-
-	+ `players`: The trainer's opponents to use to play the matches. The trainer is used by default.
-
-	Other options are passed to the `addMatches` method. The result is a promise.
-	*/
-	populate: function populate(options) {
-		options = options || {};
-		var game = options.game || this.game,
-			n = isNaN(options.n) ? 100 : +options.n,
-			trainer = options.trainer || this,
-			players = options.players || [trainer];
-		if (!Array.isArray(players)) {
-			players = [players];
-		}
-		var tournament = new ludorum.tournaments.Measurement(game, trainer, players, 1),
-			matchups = tournament.__matches__().toArray();
-		return this.addMatches(Iterable.range(Math.ceil(n / matchups.length))
-			.product(matchups)
-			.mapApply(function (i, match) {
-				return new ludorum.Match(game, match.players);
-			}), options);
-	},
-
-	/** ## Playing ############################################################################## */
+	/** ## Playing ############################################################################# */
 
 	/** `actionEvaluations` assigns a number to every action available to the given `role` at the
 	given `game` state. It uses the case base to retrieve the _k_ most similar cases. 
@@ -630,7 +601,7 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
  
 */
 games.TicTacToe = (function () {
-	/** ## Features direct from the board ####################################################### */
+	/** ## Features direct from the board ###################################################### */
 	
 	var directFeatures = function features(game) {
 		var board = typeof game === 'string' ? game : game.board;
@@ -649,13 +620,16 @@ games.TicTacToe = (function () {
 		features: directFeatures,
 		
 		casesFromGame: function casesFromGame(game, ply, moves) {
-			return [
-				this.newCase(game, ply, moves, { features: this.features(game) })
-			];
+			var move  = moves ? (moves.hasOwnProperty('Xs') ? moves.Xs : moves.Os) : '?',
+				_case = this.newCase(game, ply, moves, {
+					id: game.board + move,
+					features: this.features(game) 
+				});
+			return [_case];
 		}
 	}); // declare TicTacToe.DirectCBPlayer
 
-	/** ## Equivalence based on board symmetries and rotations. ################################# */
+	/** ## Equivalence based on board symmetries and rotations. ################################ */
 
 	/** `MAPPINGS` is a list of square indexes that define transformations between equivalent
 	Tictactoe boards.
@@ -728,6 +702,44 @@ games.TicTacToe = (function () {
 	};
 })();
 
+/** # Training
+
+Functions and definitions related to populate or curate case bases.
+*/
+
+/** The `populate` function adds cases to the database by running several matches and adding the
+resulting game states. The `options` argument may include the following:
+
++ `game`: The game state from which to start the matches. The database's `game` is used by 
+default.
+
++ `n`: The number of matches to run; 100 by default.
+
++ `trainer`: The player to use agains the opponents. This player is used by default.
+
++ `opponents`: The trainer's opponents to use to play the matches. The trainer is used by default.
+
+Other options are passed to the `addMatches` method. The result is a promise.
+*/
+training.populate = function populate(cbPlayer, options) {
+	options = options || {};
+	var game = options.game || cbPlayer.game,
+		n = isNaN(options.n) ? 100 : +options.n,
+		trainer = options.trainer || cbPlayer,
+		opponents = options.opponents || [trainer];
+	if (!Array.isArray(opponents)) {
+		opponents = [opponents];
+	}
+	var tournament = new ludorum.tournaments.Measurement(game, trainer, opponents, 1),
+		matchups = tournament.__matches__().toArray();
+	return cbPlayer
+		.addMatches(Iterable.range(Math.ceil(n / matchups.length))
+		.product(matchups)
+		.mapApply(function (i, match) {
+			return new ludorum.Match(game, match.players);
+		}), options);
+};
+
 /** # Utilities
 
 */
@@ -778,7 +790,7 @@ utils.populateAndAssess = function populateAndAssess(player, options) {
 	if (logger) {
 		logger.info("Assessing "+ game.name +" with "+ name +".");
 	}
-	return player.populate({ 
+	return training.populate(player, { 
 		n: options.populateCount || 1000,
 		trainer: options.trainer || new ludorum.players.RandomPlayer(),
 		logger: logger 
@@ -787,7 +799,7 @@ utils.populateAndAssess = function populateAndAssess(player, options) {
 		return base.Future.sequence(options.opponents || [new ludorum.players.RandomPlayer()], function (opponent) {
 			return utils.assess(player, {
 					opponent: opponent,
-					assessCount: options.assessCount || 800, 
+					assessCount: options.assessCount || 80, 
 					logger: logger 
 				}).then(function (evaluation) {
 					logger.info("Against "+ opponent.name +": "+ JSON.stringify(evaluation));
