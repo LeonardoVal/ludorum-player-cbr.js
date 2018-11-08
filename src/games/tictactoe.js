@@ -2,7 +2,7 @@
  
 */
 games.TicTacToe = (function () {
-	/** ## Features direct from the board ####################################################### */
+	/** ## Features direct from the board ###################################################### */
 	
 	var directFeatures = function features(game) {
 		var board = typeof game === 'string' ? game : game.board;
@@ -21,13 +21,16 @@ games.TicTacToe = (function () {
 		features: directFeatures,
 		
 		casesFromGame: function casesFromGame(game, ply, moves) {
-			return [
-				this.newCase(game, ply, moves, { features: this.features(game) })
-			];
+			var move  = moves ? (moves.hasOwnProperty('Xs') ? moves.Xs : moves.Os) : '?',
+				_case = this.newCase(game, ply, moves, {
+					id: game.board + move,
+					features: this.features(game) 
+				});
+			return [_case];
 		}
 	}); // declare TicTacToe.DirectCBPlayer
 
-	/** ## Equivalence based on board symmetries and rotations. ################################# */
+	/** ## Equivalence based on board symmetries and rotations. ################################ */
 
 	/** `MAPPINGS` is a list of square indexes that define transformations between equivalent
 	Tictactoe boards.
