@@ -10,6 +10,7 @@ module.exports = function (grunt) {
 			'Case', 'CaseBase', 'CaseBasedPlayer',
 			'dbs/MemoryCaseBase', 'dbs/SQLiteCaseBase',
 			'games/tictactoe',// 'games/risk',
+			'training',
 			'utils',
 			'__epilogue__'],
 		deps: [

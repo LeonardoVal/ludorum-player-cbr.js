@@ -48,7 +48,7 @@ utils.populateAndAssess = function populateAndAssess(player, options) {
 	if (logger) {
 		logger.info("Assessing "+ game.name +" with "+ name +".");
 	}
-	return player.populate({ 
+	return training.populate(player, { 
 		n: options.populateCount || 1000,
 		trainer: options.trainer || new ludorum.players.RandomPlayer(),
 		logger: logger 
@@ -57,7 +57,7 @@ utils.populateAndAssess = function populateAndAssess(player, options) {
 		return base.Future.sequence(options.opponents || [new ludorum.players.RandomPlayer()], function (opponent) {
 			return utils.assess(player, {
 					opponent: opponent,
-					assessCount: options.assessCount || 800, 
+					assessCount: options.assessCount || 80, 
 					logger: logger 
 				}).then(function (evaluation) {
 					logger.info("Against "+ opponent.name +": "+ JSON.stringify(evaluation));
