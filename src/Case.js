@@ -54,7 +54,7 @@ var Case = exports.Case = declare({
 	/** An `identifier` for a case is a string that can be used as a primary key of a case base.
 	*/
 	identifier: function identifier() {
-		return this.features.join(',') + JSON.stringify(this.actions);
+		return this.features.join('|') + JSON.stringify(this.actions);
 	},
 
 	/** Return a database record for this case.
@@ -62,7 +62,7 @@ var Case = exports.Case = declare({
 	record: function record(obj) {
 		obj = obj || {};
 		var p;
-		obj.id = record.id;
+		obj.id = this.id;
 		obj.ply = this.ply;
 		obj.count = this.count;
 		this.features.forEach(function (f, i) {
@@ -128,6 +128,7 @@ var Case = exports.Case = declare({
 		identifier: 'Case',
 		serializer: function serialize_Case(obj) {
 			return [{
+				id: obj.id,
 				count: obj.count,
 				ply: obj.ply,
 				features: obj.features,
