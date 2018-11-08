@@ -16,7 +16,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 	*/
 	casesFromGame: base.objects.unimplemented('CaseBasedPlayer', 'casesFromGame(game, ply, moves)'),
 
-	/**
+	/** `newCase` is a helper for building a case.
 	*/
 	newCase: function newCase(game, ply, moves, _case) {
 		_case = _case || {};
@@ -32,7 +32,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 		return new Case(_case);
 	},
 
-	/** ## Database building #################################################################### */
+	/** ## Database building ################################################################### */
 
 	/** The `addMatch` method runs the given `match` and adds all its game states as cases in the
 	player's database. It returns a promise.
@@ -43,8 +43,8 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 		return match.run().then(function () {
 			var result = match.result(),
 				cases = iterable(match.history).filter(function (entry) {
-					return !entry.moves;
-				}, function (entry, i) {
+					return !!entry.moves;
+				}).map(function (entry, i) {
 					return cbrPlayer.casesFromGame(entry.state, i, entry.moves);  
 				}).flatten().map(function (_case) {
 					return _case.addResult(result);
@@ -78,39 +78,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 		});
 	},
 
-	/** The `populate` method adds cases to the database by running several matches and adding the
-	resulting game states. The `options` argument may include the following:
-
-	+ `game`: The game state from which to start the matches. The database's `game` is used by 
-	default.
-
-	+ `n`: The number of matches to run; 100 by default.
-
-	+ `trainer`: The player to use agains the opponents. This player is used by default.
-
-	+ `players`: The trainer's opponents to use to play the matches. The trainer is used by default.
-
-	Other options are passed to the `addMatches` method. The result is a promise.
-	*/
-	populate: function populate(options) {
-		options = options || {};
-		var game = options.game || this.game,
-			n = isNaN(options.n) ? 100 : +options.n,
-			trainer = options.trainer || this,
-			players = options.players || [trainer];
-		if (!Array.isArray(players)) {
-			players = [players];
-		}
-		var tournament = new ludorum.tournaments.Measurement(game, trainer, players, 1),
-			matchups = tournament.__matches__().toArray();
-		return this.addMatches(Iterable.range(Math.ceil(n / matchups.length))
-			.product(matchups)
-			.mapApply(function (i, match) {
-				return new ludorum.Match(game, match.players);
-			}), options);
-	},
-
-	/** ## Playing ############################################################################## */
+	/** ## Playing ############################################################################# */
 
 	/** `actionEvaluations` assigns a number to every action available to the given `role` at the
 	given `game` state. It uses the case base to retrieve the _k_ most similar cases. 
