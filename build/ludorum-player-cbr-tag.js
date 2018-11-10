@@ -281,7 +281,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 				}).flatten().map(function (_case) {
 					return _case.addResult(result);
 				});
-			cbrPlayer.caseBase.addCase(cases);
+			cbrPlayer.caseBase.addCase(cases.toArray());
 			return match;
 		});
 	},
@@ -544,28 +544,33 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 		this.__createTable__(this.__tableName__, reference);
 	},
 	
-	addCase: function addCase(_case) {
-		if (_case instanceof Case) {
-			var record = _case.record(),
-				fields = Object.keys(record),
-				sql = 'INSERT OR IGNORE INTO '+ this.__tableName__ +' ('+ fields.join(',') +
-					') VALUES ('+ Iterable.repeat('?', fields.length).join(',') +')',
-				isNew = this.__runSQL__(sql, fields.map(function (f) {
-						return record[f];
-					})).changes > 0;
-			if (!isNew) { // Insert was ignored because the case is already stored.
-				this.__runSQL__('UPDATE '+ this.__tableName__ +' '+
-					'SET count = count + 1, ply = (ply * count + '+ (_case.ply || 0) +') / (count + 1), '+
-					Object.keys(record).filter(function (k) {
-						return /^(won_|tied_|lost_)/.test(k);
-					}).map(function (k) {
-						return k +' = '+ k +' + '+ record[k];
-					}).join(', ') +' WHERE id = \''+ record.id +'\''
-				);
-			}
-		} else {
-			iterable(_case).forEach(this.addCase.bind(this));
+	addCase: function addCase(_cases) {
+		if (!Array.isArray(_cases)) {
+			_cases = [_cases]; 
 		}
+		if (_cases.length < 1) {
+			return;
+		}
+		var cb = this,
+			_case = _cases[0],
+			record = _case.record(),
+			fields = Object.keys(record),
+			resultFields = fields.filter(function (k) {
+				return /^(won_|tied_|lost_)/.test(k);
+			}),
+			sql = 'INSERT INTO '+ this.__tableName__ +' ('+ fields.join(',') +')'+
+				'VALUES ('+ Iterable.repeat('?', fields.length).join(',') +')'+
+				'ON CONFLICT(id) DO UPDATE SET'+
+				' count = count + 1, ply = (ply * count + excluded.ply) / (count + 1), '+
+				' '+ resultFields.map(function (k) {
+						return k +' = '+ k +' + excluded.'+ k;
+					}).join(', '); 
+		_cases.forEach(function (_case) {
+			var record = _case.record();
+			cb.__runSQL__(sql, fields.map(function (f) {
+				return record[f];
+			}));
+		});
 	},
 
 	cases: function cases() {

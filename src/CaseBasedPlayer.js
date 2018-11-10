@@ -49,7 +49,7 @@ var CaseBasedPlayer = exports.CaseBasedPlayer = base.declare(ludorum.Player, {
 				}).flatten().map(function (_case) {
 					return _case.addResult(result);
 				});
-			cbrPlayer.caseBase.addCase(cases);
+			cbrPlayer.caseBase.addCase(cases.toArray());
 			return match;
 		});
 	},
