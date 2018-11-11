@@ -489,6 +489,8 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 		this.__setupDatabase__(params);
 	},
 
+	MAX_CASES_PER_UPSERT: 10,
+		
 	/** ## Database setup and management ######################################################## */
 
 	/**
@@ -558,24 +560,28 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 			return;
 		}
 		var cb = this,
+			MAX_CASES_PER_UPSERT = cb.MAX_CASES_PER_UPSERT,
 			_case = _cases[0],
 			record = _case.record(),
 			fields = Object.keys(record),
 			resultFields = fields.filter(function (k) {
 				return /^(won_|tied_|lost_)/.test(k);
 			}),
-			sql = 'INSERT INTO '+ this.__tableName__ +' ('+ fields.join(',') +')'+
-				'VALUES ('+ Iterable.repeat('?', fields.length).join(',') +')'+
+			sql = 'INSERT INTO '+ this.__tableName__ +' ('+ fields.join(',') +') VALUES '+
+				Iterable.repeat('('+ Iterable.repeat('?', fields.length).join(',') +')',
+					Math.min(_cases.length, MAX_CASES_PER_UPSERT)).join(',') +' '+
 				'ON CONFLICT(id) DO UPDATE SET'+
 				' count = count + 1, ply = (ply * count + excluded.ply) / (count + 1), '+
 				' '+ resultFields.map(function (k) {
 						return k +' = '+ k +' + excluded.'+ k;
 					}).join(', '); 
-		_cases.forEach(function (_case) {
-			var record = _case.record();
-			cb.__runSQL__(sql, fields.map(function (f) {
-				return record[f];
-			}));
+		iterable(_cases).slices(MAX_CASES_PER_UPSERT).forEach(function (slice) {
+			cb.__runSQL__(sql, iterable(slice).map(function (_case) {
+				var record = _case.record();
+				return fields.map(function (f) {
+					return record[f];
+				});
+			}).flatten().toArray());
 		});
 	},
 
