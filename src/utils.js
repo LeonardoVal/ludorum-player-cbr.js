@@ -42,20 +42,37 @@ utils.assess = function assess(cbPlayer, options) {
 };
 
 utils.populateAndAssess = function populateAndAssess(player, options) {
+	function randomPlayer() {
+		return new ludorum.players.RandomPlayer({ name: 'RandomPlayer' });
+	}
+
 	var name = options.name || player.name,
 		logger = options.logger,
 		game = options.game || player.game;
 	if (logger) {
 		logger.info("Assessing "+ game.name +" with "+ name +".");
 	}
-	return training.populate(player, { 
-		n: options.populateCount || 1000,
-		trainer: options.trainer || new ludorum.players.RandomPlayer(),
-		logger: logger 
+	logger.info("Base line evaluation for "+ game.name +" with a random player.");
+	return base.Future.sequence(options.opponents || [randomPlayer()], function (opponent) {
+		return utils.assess(randomPlayer(), {
+				game: game,
+				opponent: opponent,
+				assessCount: options.assessCount || 80, 
+				logger: logger 
+			}).then(function (evaluation) {
+				logger.info("Against "+ opponent.name +": "+ JSON.stringify(evaluation));
+			});
+	}).then(function () {
+		return training.populate(player, { 
+			n: options.populateCount || 1000,
+			trainer: options.trainer || randomPlayer(),
+			logger: logger 
+		});
 	}).then(function () {
 		logger.info("Evaluating player for "+ game.name +" trained with "+ name +".");
-		return base.Future.sequence(options.opponents || [new ludorum.players.RandomPlayer()], function (opponent) {
+		return base.Future.sequence(options.opponents || [randomPlayer()], function (opponent) {
 			return utils.assess(player, {
+					game: game,
 					opponent: opponent,
 					assessCount: options.assessCount || 80, 
 					logger: logger 
