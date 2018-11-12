@@ -493,7 +493,8 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 		
 	/** ## Database setup and management ######################################################## */
 
-	/**
+	/** The SQLite3 database setup creates the database file if required and configures the 
+	connection, disabling transaction and setting efficient cache parameters. 
 	*/
 	__setupDatabase__: function __setupDatabase__(params) {
 		var Database = this.Database || require('better-sqlite3');
@@ -509,6 +510,15 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 		this.__tableName__ = params.tableName;
 	},
 
+	/** The case base is represented by a single table, with the following field:
+	+ `id`: a string with the case's identifier,
+	+ `count`: the amount of times this case has occured,
+	+ `ply`: the average ply number this case has occured,
+	+ `a_player`: the action performed for each player (`null` if none was performed),
+	+ `won_player`, `tied_player`, `lost_player`: counts of matches resulting in a win, tie or loss
+		for each player,
+	+ `f_n`: value for feature number _n_.
+	*/
 	__createTable__: function __createTable__(tableName, reference) {
 		var actionColumns = Object.keys(reference.actions).map(function (p) {
 				return 'a_'+ p +' TEXT';
@@ -524,6 +534,8 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 			actionColumns +', '+ resultColumns +', '+ featureColumns +')');
 	},
 
+	/** Runs a SQL statement with arguments. 
+	*/
 	__runSQL__: function __runSQL__(sql) {
 		var args = Array.prototype.slice.call(arguments, 1);
 		try {
@@ -534,6 +546,8 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 		}
 	},
 
+	/** Executes a SQL query with parameters and returns the list of records in the result set. 
+	*/
 	__getSQL__: function __getSQL__(sql) {
 		var args = Array.prototype.slice.call(arguments, 1);
 		try {
@@ -585,31 +599,37 @@ dbs.SQLiteCaseBase = declare(CaseBase, {
 		});
 	},
 
+	/** The list of all `cases` returns all cases in the table in no particular order. 
+	*/
 	cases: function cases() {
 		return this.__getSQL__('SELECT * FROM '+ this.__tableName__)
 			.map(Case.fromRecord.bind(Case));
 	},
 
-	/*FIXME
-	__nn_sql__: function __nn_sql__(k, game) {
-		var cases = this.Case.fromGame(game);
-		return 'SELECT *, min('+ cases.map(function (_case) {
+	/** SQL query for retrieving the `k` closest cases to the given `cases`. 
+	*/
+	__nn_sql__: function __nn_sql__(k, cases) {
+		var distancePerCase = cases.map(function (_case) {
 				return _case.features.map(function (v, i) {
-					return v !== null && !isNaN(v) ? 'abs(ifnull(f'+ i +'-('+ v +'),0))' : '0';
+					return v !== null && !isNaN(v) ? 
+						'abs(ifnull(f'+ i +'-('+ v +'),0))' : '0';
 				}).join('+');
-			}).join(', ') +') AS distance '+
+			}),
+			distanceSQL = distancePerCase.length > 1 ? distancePerCase[0] :
+				'min('+ distancePerCase.join(', ') +')';
+		return 'SELECT *, '+ distanceSQL +' AS distance '+
 			'FROM '+ this.__tableName__ +' '+
 			'ORDER BY distance ASC LIMIT '+ k;
 	},
 
-	nn: function nn(k, game) {
-		var cb = this,
-			sql = this.__nn_sql__(k, game);
+	/** Returns the `k` closest cases to the given `cases`.
+	*/
+	nn: function nn(k, cases) {
+		var sql = this.__nn_sql__(k, cases);
 		return this.__db__.prepare(sql).all().map(function (row) {
-			return [cb.Case.fromRecord(row), row.distance];
+			return [Case.fromRecord(row), row.distance];
 		});
 	}
-	*/
 }); // declare SQLiteCaseBase
 
 
@@ -801,20 +821,37 @@ utils.assess = function assess(cbPlayer, options) {
 };
 
 utils.populateAndAssess = function populateAndAssess(player, options) {
+	function randomPlayer() {
+		return new ludorum.players.RandomPlayer({ name: 'RandomPlayer' });
+	}
+
 	var name = options.name || player.name,
 		logger = options.logger,
 		game = options.game || player.game;
 	if (logger) {
 		logger.info("Assessing "+ game.name +" with "+ name +".");
 	}
-	return training.populate(player, { 
-		n: options.populateCount || 1000,
-		trainer: options.trainer || new ludorum.players.RandomPlayer(),
-		logger: logger 
+	logger.info("Base line evaluation for "+ game.name +" with a random player.");
+	return base.Future.sequence(options.opponents || [randomPlayer()], function (opponent) {
+		return utils.assess(randomPlayer(), {
+				game: game,
+				opponent: opponent,
+				assessCount: options.assessCount || 80, 
+				logger: logger 
+			}).then(function (evaluation) {
+				logger.info("Against "+ opponent.name +": "+ JSON.stringify(evaluation));
+			});
+	}).then(function () {
+		return training.populate(player, { 
+			n: options.populateCount || 1000,
+			trainer: options.trainer || randomPlayer(),
+			logger: logger 
+		});
 	}).then(function () {
 		logger.info("Evaluating player for "+ game.name +" trained with "+ name +".");
-		return base.Future.sequence(options.opponents || [new ludorum.players.RandomPlayer()], function (opponent) {
+		return base.Future.sequence(options.opponents || [randomPlayer()], function (opponent) {
 			return utils.assess(player, {
+					game: game,
 					opponent: opponent,
 					assessCount: options.assessCount || 80, 
 					logger: logger 
