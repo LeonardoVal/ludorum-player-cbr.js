@@ -1,8 +1,10 @@
 var ludorumCBR = require('../build/ludorum-player-cbr'),
+	Database = require('better-sqlite3'),
 	ludorum = require('ludorum'),
 	base = require('creatartis-base');
 
-var LOGGER = base.Logger.ROOT;
+var DATABASE = new Database('./tests/dbs/tictactoe-cbr.sqlite'),
+	LOGGER = base.Logger.ROOT;
 	LOGGER.appendToConsole();
 
 base.Future.sequence(base.iterable({
@@ -18,7 +20,7 @@ base.Future.sequence(base.iterable({
 			name: 'DirectCBPlayer',
 			k: 30,
 			caseBase: new ludorumCBR.dbs.SQLiteCaseBase({
-				db: './tests/dbs/tictactoe-cbr.sqlite',
+				db: DATABASE,
 				tableName: 'CB_TicTacToe_'+ name 
 			})
 		}), {
