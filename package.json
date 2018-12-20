@@ -33,7 +33,7 @@
 	},
 	"devDependencies": {
 		"@creatartis/creatartis-grunt": "~0.0.16-alpha",
-		"better-sqlite3": "~5.0.1",
+		"better-sqlite3": "~5.2.1",
 		"@creatartis/ludorum-game-mancala": "~0.1.1",
 		"@creatartis/ludorum-game-connect4": "~0.1.1",
 		"@creatartis/ludorum-game-reversi": "~0.1.0",
