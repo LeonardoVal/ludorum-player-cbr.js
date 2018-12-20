@@ -4,7 +4,7 @@ games.Risk = (function () {
   
   var DirectCBPlayer = declare(CaseBasedPlayer, {
     constructor: function DirectCBPlayer(params){
-      CaseBasedPlayer.call(this, params)
+      CaseBasedPlayer.call(this, params);
     },
 
     game: new ludorum_risky.Risk({
@@ -19,7 +19,7 @@ games.Risk = (function () {
       }
      }),
 
-  })
+  });
 
   return {
     DirectCBPlayer
