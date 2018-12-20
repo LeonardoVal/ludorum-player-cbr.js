@@ -19,7 +19,8 @@ module.exports = function (grunt) {
 				id: 'sermat', name: 'Sermat',
 				path: 'node_modules/sermat/build/sermat-umd.js'
 			},
-			{ id: 'ludorum' }
+			{ id: 'ludorum' },
+			{ id: '@creatartis/ludorum-risky', name: 'ludorum_risky' }
 		],
 		targets: {
 			build_umd: {

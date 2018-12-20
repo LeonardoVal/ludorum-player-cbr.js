@@ -1,5 +1,5 @@
 (function (init) { "use strict";
-			this["ludorum-player-cbr"] = init(this.base,this.Sermat,this.ludorum);
+			this["ludorum-player-cbr"] = init(this.base,this.Sermat,this.ludorum,this.ludorum_risky);
 		}).call(this,/** Package wrapper and layout.
 */
 function __init__(base, Sermat, ludorum) { "use strict";

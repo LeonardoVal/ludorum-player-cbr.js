@@ -1,10 +1,10 @@
 (function (init) { "use strict";
 			if (typeof define === 'function' && define.amd) {
-				define(["creatartis-base","sermat","ludorum"], init); // AMD module.
+				define(["creatartis-base","sermat","ludorum","ludorum-risky"], init); // AMD module.
 			} else if (typeof exports === 'object' && module.exports) {
-				module.exports = init(require("creatartis-base"),require("sermat"),require("ludorum")); // CommonJS module.
+				module.exports = init(require("creatartis-base"),require("sermat"),require("ludorum"),require("@creatartis/ludorum-risky")); // CommonJS module.
 			} else {
-				this["ludorum-player-cbr"] = init(this.base,this.Sermat,this.ludorum); // Browser.
+				this["ludorum-player-cbr"] = init(this.base,this.Sermat,this.ludorum,this.ludorum_risky); // Browser.
 			}
 		}).call(this,/** Package wrapper and layout.
 */
