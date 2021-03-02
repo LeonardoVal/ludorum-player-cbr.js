@@ -9,7 +9,8 @@ module.exports = function (grunt) {
 		sourceNames: ['__prologue__',
 			'Case', 'CaseBase', 'CaseBasedPlayer',
 			'dbs/MemoryCaseBase', 'dbs/SQLiteCaseBase',
-			'games/tictactoe',// 'games/risk',
+			'games/tictactoe',
+			'games/risk',
 			'training',
 			'utils',
 			'__epilogue__'],
@@ -19,7 +20,8 @@ module.exports = function (grunt) {
 				id: 'sermat', name: 'Sermat',
 				path: 'node_modules/sermat/build/sermat-umd.js'
 			},
-			{ id: 'ludorum' }
+			{ id: 'ludorum' },
+			{ id: '@creatartis/ludorum-risky', name: 'ludorum_risky' }
 		],
 		targets: {
 			build_umd: {

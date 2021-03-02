@@ -1,31 +1,54 @@
 /**
  */
-games.Risk = (function () {
-  return {
-    /** The "Risk" encoding has 83 features , 42 to define the number of troops in a territory,
-     *  42 to define to which player that territory corresponds based on its turn,
-     *  being 0 the corresponding player with the current turn,
-     *  1 the next and so successively and 1 that determines the stage of the game  */
+games.Risk = (function () {  
 
-    Turn: function turn(game, otherPlayer) {
-      var active = game.players.indexOf(active);
-      var other = game.players.indexOf(otherPlayer);
-      if (other > active) {
-        return other - active;
-      } else {
-        return 6 - (active - other);
-      }
+  var directFeatures = (game) => {	
+    /**
+     * armies is an object, with a property for each territoy
+     * the value of each key is an array
+     * with the player name in the first position
+     * and the number of armies in the second position
+     * For each territory, if the owner is the active player,
+     * I count the number of armies as positive, otherwise, as negative
+     */	
+    let armies = game.uncompressGameState(game.armies);
+    return Object.values(armies).map((territoryInfo) => {
+      var [player, numberOfArmies] = territoryInfo;
+      return (player === game.activePlayer[0] ? 
+        numberOfArmies 
+        : -numberOfArmies);
+    });
+  };
+
+  var DirectCBPlayer = declare(CaseBasedPlayer, {
+    constructor: function DirectCBPlayer(params){
+      CaseBasedPlayer.call(this, params);
     },
 
-    Risk: function encodingRisk(game, moves, ply) {
-      return {
-        ply: ply,
-        features: game.boardMap.territories
-          .map(t => turn(game, s[t][0])).concat(s[t][1]).concat(stage), // For each territory , assign colour and number of troops , change colour based on turn.
-        actions: !moves ? null : game.players.map(function (p) {
-          return moves.hasOwnProperty(p) ? moves[p] : null;
-        })
-      };
-    }
+    game: new ludorum_risky.Risk({
+      boardMap: ludorum_risky.maps.test01,
+      armies: {
+        WhiteCountry:  ['White', 6],
+        YellowCountry: ['Yellow', 6],
+        RedCountry:    ['Red', 6],
+        GreenCountry:  ['Green', 6],
+        BlueCountry:   ['Blue', 6],
+        BlackCountry:  ['Black', 6],
+      }
+     }),
+
+     features: directFeatures,
+
+     casesFromGame: function casesFromGame(game, ply, moves){
+       var _case = this.newCase(game, ply, moves, {
+         features: this.features(game)
+       });
+       return [_case];
+     }
+
+  });
+
+  return {
+    DirectCBPlayer
   };
 })();

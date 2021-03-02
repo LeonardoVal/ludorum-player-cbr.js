@@ -1,6 +1,6 @@
 ﻿/** Package wrapper and layout.
 */
-function __init__(base, Sermat, ludorum) { "use strict";
+function __init__(base, Sermat, ludorum, ludorum_risky) { "use strict";
 // Import synonyms. ////////////////////////////////////////////////////////////////////////////////
 	var declare = base.declare,
 		unimplemented = base.objects.unimplemented,
@@ -16,8 +16,8 @@ function __init__(base, Sermat, ludorum) { "use strict";
 			__package__: 'ludorum-player-cbr',
 			__name__: 'ludorum_player_cbr',
 			__init__: __init__,
-			__dependencies__: [base, Sermat, ludorum],
-			__SERMAT__: { include: [base, ludorum] },
+			__dependencies__: [base, Sermat, ludorum, ludorum_risky],
+			__SERMAT__: { include: [base, ludorum, ludorum_risky] },
 
 			dbs: { /* Namespace for different types of case bases. */ },
 			games: { /* Namespace for functions and definitions for supporting games. */ },
